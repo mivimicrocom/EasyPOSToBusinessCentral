@@ -1,6 +1,5 @@
-object Service2: TService2
-  OldCreateOrder = False
-  DisplayName = 'Service2'
+object EasyPOSToBusinessCentralService: TEasyPOSToBusinessCentralService
+  DisplayName = 'EasyPOS To Business Central'
   AfterInstall = ServiceAfterInstall
   OnStart = ServiceStart
   OnStop = ServiceStop

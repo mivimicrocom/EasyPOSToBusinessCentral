@@ -19,33 +19,51 @@ uses
   Vcl.Dialogs,
   Data.DB,
   System.NetEncoding,
-  IBX.IBCustomDataSet,
-  IBX.IBQuery,
-  IBX.IBDatabase;
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Error,
+  FireDAC.UI.Intf,
+  FireDAC.Phys.Intf,
+  FireDAC.Stan.Def,
+  FireDAC.Stan.Pool,
+  FireDAC.Stan.Async,
+  FireDAC.Phys,
+  FireDAC.VCLUI.Wait,
+  FireDAC.Comp.Client,
+  FireDAC.Phys.FB,
+  FireDAC.Phys.FBDef,
+  FireDAC.Stan.Param,
+  FireDAC.DatS,
+  FireDAC.DApt.Intf,
+  FireDAC.DApt,
+  FireDAC.Comp.DataSet,
+  FireDAC.Phys.IBBase;
 
 type
   TDM = class(TDataModule)
-    DB: TIBDatabase;
-    tr: TIBTransaction;
-    QFetchWEBOrder: TIBQuery;
     tiTimer: TTimer;
-    trInsert: TIBTransaction;
-    QTemp: TIBQuery;
+    dbMain: TFDConnection;
+    FDPhysFBDriverLink1: TFDPhysFBDriverLink;
+    trnMain: TFDTransaction;
+    qryFetchData: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
-    {Private declarations}
+    { Private declarations }
     glTimer: Integer;
     LocalDatabase: string;
     LocalUser: string;
     LocalPassword: string;
     LocalLogFileFolder: String;
-    procedure LocalAddLog(lStr: String);
+    procedure LocalAddLog(aStringToWriteToLogFile: String);
     procedure InitialilzeProgram;
     procedure DoHandleEksportToBusinessCentral;
+    function ConnectToDB: Boolean;
+    procedure DisconnectFromDB;
+    procedure DoClearLogFolder;
+    procedure DoSyncronizeFinansCialRecords;
   public
-    {Public declarations}
+    { Public declarations }
     iniFile: TIniFile;
-    mmoLog: TStringList;
   end;
 
 var
@@ -55,11 +73,193 @@ implementation
 
 {%CLASSGROUP 'Vcl.Controls.TControl'}
 {$R *.dfm}
-{TDM}
+{ TDM }
+
+uses
+  System.IOUtils;
+
+const
+  NumberOfDays = 21;
+
+procedure TDM.LocalAddLog(aStringToWriteToLogFile: String);
+(*
+  This will write into the local log
+*)
+var
+  lLogFileName: String;
+  lTextToWriteToLogFile: String;
+begin // LocalAddLog
+  try
+    ForceDirectories(LocalLogFileFolder);
+    lLogFileName := LocalLogFileFolder + 'Log' + FormatDateTime('yyyymmdd', NOW) + '.Txt';
+
+    lTextToWriteToLogFile := FormatDateTime('dd-mm-yyyy hh:mm:ss', NOW) + ' - ' + aStringToWriteToLogFile + #13#10;
+    TFile.AppendAllText(lLogFileName, lTextToWriteToLogFile)
+
+  except
+    on E: Exception do
+    begin
+    end;
+  end;
+end;
+
+function TDM.ConnectToDB: Boolean;
+(*
+  This will open a connection to a database
+*)
+var
+  lServer: string;
+  lDatabase: string;
+begin
+  try
+    LocalAddLog('Connecting to database');
+
+    lServer := Copy(LocalDatabase, 1, POS(':', LocalDatabase) - 1);
+    lDatabase := Copy(LocalDatabase, POS(':', LocalDatabase) + 1, length(LocalDatabase) - POS(':', LocalDatabase));
+
+    dbMain.Close;
+    dbMain.Params.Clear;
+    dbMain.Params.Add('DriverID=FB');
+    dbMain.Params.Add('Server=' + lServer);
+    dbMain.Params.Add('Database=' + lDatabase);
+    dbMain.Params.Add('User_Name=' + LocalUser);
+    dbMain.Params.Add('Password=' + LocalPassword);
+    dbMain.Open;
+
+    Result := TRUE;
+    LocalAddLog('Connected to database');
+  except
+    on E: Exception do
+    begin
+      Result := FALSE;
+      LocalAddLog('ERROR (Connect DB)!');
+      LocalAddLog(E.Message);
+    end;
+  end;
+end;
+
+procedure TDM.DisconnectFromDB;
+(*
+  This will commit transaction and disconnect from database
+*)
+begin
+  try
+    if (trnMain.Active) then
+      trnMain.Commit;
+    dbMain.Close;
+    LocalAddLog('Disconnected to database');
+  except
+    on E: Exception do
+    begin
+      LocalAddLog('ERROR (Disconnect DB)!');
+      LocalAddLog(E.Message);
+    end;
+  end;
+end;
+
+procedure TDM.DoClearLogFolder;
+var
+  lFilSti: string;
+  lFilNavn: string;
+  FileAttrs: Integer;
+  sr: TSearchRec;
+begin
+  LocalAddLog('Do clear log folders');
+  lFilSti := LocalLogFileFolder;
+  // Set log file wildcard
+  lFilNavn := lFilSti + 'Log*.*';
+  FileAttrs := faAnyFile;
+  // Find first logfile
+  if FindFirst(lFilNavn, FileAttrs, sr) = 0 then
+  begin
+    if (sr.TimeStamp < NOW - NumberOfDays) then
+    begin
+      if (not(DeleteFile(PChar(lFilSti + sr.Name)))) then
+      begin
+        LocalAddLog('  Could NOT delete: ' + lFilSti + sr.Name);
+      end
+      else
+      begin
+        LocalAddLog('  File deleted: ' + lFilSti + sr.Name);
+      end;
+    end;
+  end;
+  // Find next logfile
+  while (FindNext(sr) = 0) do
+  begin
+    // If file is older than 31 days delete it-
+    if (sr.TimeStamp < NOW - NumberOfDays) then
+    begin
+      if (not(DeleteFile(PChar(lFilSti + sr.Name)))) then
+      begin
+        LocalAddLog('  Could NOT delete: ' + lFilSti + sr.Name);
+      end
+      else
+      begin
+        LocalAddLog('  File deleted: ' + lFilSti + sr.Name);
+      end;
+    end;
+  end;
+  LocalAddLog('Log folder has been cleared');
+end;
+
+procedure TDM.DoSyncronizeFinansCialRecords;
+begin
+  LocalAddLog('DoSyncronizeFinansCialRecords - BEGIN');
+  LocalAddLog('DoSyncronizeFinansCialRecords - END');
+end;
 
 procedure TDM.DoHandleEksportToBusinessCentral;
+var
+  lSyncroniseFinancialRecords: Boolean;
+  lItems: Boolean;
+  lSalesTransactions: Boolean;
+  lMovementsTransactions: Boolean;
 begin
-  //This will check what to syncronize and do it.
+  // This will check what to syncronize and do it.
+  try
+    DM.InitialilzeProgram;
+    DoClearLogFolder;
+
+    lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
+    lItems := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
+    lSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
+    lMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
+
+    LocalAddLog(Format('Syncronize financial records: %s',[lSyncroniseFinancialRecords.ToString(TRUE)]));
+    LocalAddLog(Format('Syncronize Items: %s',[lItems.ToString(TRUE)]));
+    LocalAddLog(Format('Syncronize Sales Transactions: %s',[lSalesTransactions.ToString(TRUE)]));
+    LocalAddLog(Format('Syncronize Movements Transaction: %s',[lMovementsTransactions.ToString(TRUE)]));
+
+    if lSyncroniseFinancialRecords then
+    begin
+      DoSyncronizeFinansCialRecords;
+    end;
+
+    if lItems then
+    begin
+
+    end;
+
+    if lSalesTransactions then
+    begin
+
+    end;
+
+    if lMovementsTransactions then
+    begin
+
+    end;
+
+    if (ConnectToDB) then
+    begin
+      DisconnectFromDB;
+    end
+    else
+    begin
+    end;
+  except
+  end;
 end;
 
 procedure TDM.InitialilzeProgram;
@@ -70,10 +270,6 @@ procedure TDM.InitialilzeProgram;
 *)
 var
   PrgVers1, PrgVers2, PrgVers3, PrgVers4: Word;
-  ii: Integer;
-  lCustomer: string;
-  lStr: string;
-  ExeFolder: string;
 
   procedure GetBuildInfo(var V1, V2, V3, V4: Word);
   var
@@ -87,7 +283,7 @@ var
     if VerInfoSize = 0 then
     begin
       Dummy := GetLastError;
-    end; {if}
+    end; { if }
     GetMem(JvVerInf, VerInfoSize);
     GetFileVersionInfo(PChar(ParamStr(0)), 0, VerInfoSize, JvVerInf);
     VerQueryValue(JvVerInf, '\', Pointer(VerValue), VerValueSize);
@@ -102,15 +298,17 @@ var
   end;
 
 begin
-  mmoLog.Clear;
-
   GetBuildInfo(PrgVers1, PrgVers2, PrgVers3, PrgVers4);
 
   glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
   LocalLogFileFolder := iniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
+  LocalLogFileFolder := 'c:\EasyPOSToBC\Logs\';
   ForceDirectories(LocalLogFileFolder);
 
-  LocalAddLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' + IntToStr(PrgVers1) + '.' + IntToStr(PrgVers2) + '.' + IntToStr(PrgVers3) + '.' + IntToStr(PrgVers4));
+  LocalAddLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' +
+              IntToStr(PrgVers1) + '.' + IntToStr(PrgVers2) + '.' + IntToStr(PrgVers3) + '.' + IntToStr(PrgVers4));
+  LocalAddLog(' ');
+  LocalAddLog('INI file: '+iniFile.FileName);
   LocalAddLog(' ');
 
   LocalAddLog('Program timer (i sekunder): ' + IntToStr(glTimer));
@@ -130,41 +328,6 @@ begin
   LocalAddLog('  ');
 
   tiTimer.Interval := glTimer * 1000;
-end;
-
-procedure TDM.LocalAddLog(lStr: String);
-(*
-  This will write into the local customer log
-*)
-var
-  DumpFil: TextFile;
-  DumpFilNavn: String;
-  lStr2: String;
-begin // WriteDumpFil
-  try
-    DumpFilNavn := LocalLogFileFolder;
-    if (not(DirectoryExists(DumpFilNavn))) then
-      CreateDir(DumpFilNavn);
-    DumpFilNavn := LocalLogFileFolder + 'Log' + FormatDateTime('yyyymmdd', NOW) + '.Txt';
-    AssignFile(DumpFil, DumpFilNavn);
-    if (NOT(FileExists(DumpFilNavn))) then
-    begin
-      Rewrite(DumpFil);
-    end
-    else
-    begin
-      Append(DumpFil);
-    end;
-    lStr2 := FormatDateTime('dd-mm-yyyy hh:mm:ss', NOW) + ' - ' + lStr;
-    WriteLn(DumpFil, lStr2);
-    Flush(DumpFil);
-    CloseFile(DumpFil);
-  except
-    on E: Exception do
-    begin
-    end;
-  end;
-  mmoLog.Add(lStr2);
 end;
 
 procedure TDM.tiTimerTimer(Sender: TObject);

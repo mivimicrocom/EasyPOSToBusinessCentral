@@ -2,7 +2,7 @@ program EasyPOS_To_BusinessCentral;
 
 uses
   Vcl.SvcMgr,
-  uEasyPOSToBC in 'uEasyPOSToBC.pas' {Service2: TService},
+  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService},
   UDM in 'UDM.pas' {DM: TDataModule};
 
 {$R *.RES}
@@ -25,8 +25,8 @@ begin
   //
   if not Application.DelayInitialize or Application.Installing then
     Application.Initialize;
-  Application.CreateForm(TService2, EasyPOSToBusinessCentralService);
   Application.CreateForm(TDM, DM);
+  Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
   Application.Run;
 
 end.

@@ -13,19 +13,19 @@ uses
   Vcl.Dialogs;
 
 type
-  TService2 = class(TService)
+  TEasyPOSToBusinessCentralService = class(TService)
     procedure ServiceAfterInstall(Sender: TService);
     procedure ServiceStart(Sender: TService; var Started: Boolean);
     procedure ServiceStop(Sender: TService; var Stopped: Boolean);
   private
-    {Private declarations}
+    { Private declarations }
   public
     function GetServiceController: TServiceController; override;
-    {Public declarations}
+    { Public declarations }
   end;
 
 var
-  EasyPOSToBusinessCentralService: TService2;
+  EasyPOSToBusinessCentralService: TEasyPOSToBusinessCentralService;
 
 implementation
 
@@ -42,40 +42,38 @@ begin
   EasyPOSToBusinessCentralService.Controller(CtrlCode);
 end;
 
-function TService2.GetServiceController: TServiceController;
+function TEasyPOSToBusinessCentralService.GetServiceController: TServiceController;
 begin
   Result := ServiceController;
 end;
 
-procedure TService2.ServiceAfterInstall(Sender: TService);
+procedure TEasyPOSToBusinessCentralService.ServiceAfterInstall(Sender: TService);
 var
   Reg: TRegistry;
 begin
-  Reg := TRegistry.Create(KEY_READ or KEY_WRITE);
-  try
-    Reg.RootKey := HKEY_LOCAL_MACHINE;
-    if Reg.OpenKey('\SYSTEM\CurrentControlSet\Services\' + Name, false) then
-    begin
-      Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to BUsiness Central.');
-      Reg.CloseKey;
+    Reg := TRegistry.Create(KEY_READ or KEY_WRITE);
+    try
+      Reg.RootKey := HKEY_LOCAL_MACHINE;
+      if Reg.OpenKey('\SYSTEM\CurrentControlSet\Services\' + Name, false) then
+      begin
+        Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to BUsiness Central.');
+        Reg.CloseKey;
+      end;
+    finally
+      Reg.Free;
     end;
-  finally
-    Reg.Free;
-  end;
 end;
 
-procedure TService2.ServiceStart(Sender: TService; var Started: Boolean);
+procedure TEasyPOSToBusinessCentralService.ServiceStart(Sender: TService; var Started: Boolean);
 begin
-  DM.mmoLog := TStringList.Create;
   DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
   DM.tiTimer.Interval := 2000;
   DM.tiTimer.Enabled := TRUE;
 end;
 
-procedure TService2.ServiceStop(Sender: TService; var Stopped: Boolean);
+procedure TEasyPOSToBusinessCentralService.ServiceStop(Sender: TService; var Stopped: Boolean);
 begin
   try
-    DM.mmoLog.Free;
     DM.iniFile.Free;
   except
 
