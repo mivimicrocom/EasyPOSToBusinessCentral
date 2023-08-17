@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{E30C3172-C64D-43A0-AA6B-85A56979B189}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="EasyPOS_To_BusinessCentral.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\AutoFetchWEBPictures\AutoFetchWEBPictures.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="EasyPOS_To_BusinessCentral">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj"/>
+    </Target>
+    <Target Name="EasyPOS_To_BusinessCentral:Clean">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EasyPOS_To_BusinessCentral:Make">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AutoFetchWEBPictures">
+        <MSBuild Projects="..\AutoFetchWEBPictures\AutoFetchWEBPictures.dproj"/>
+    </Target>
+    <Target Name="AutoFetchWEBPictures:Clean">
+        <MSBuild Projects="..\AutoFetchWEBPictures\AutoFetchWEBPictures.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AutoFetchWEBPictures:Make">
+        <MSBuild Projects="..\AutoFetchWEBPictures\AutoFetchWEBPictures.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral;AutoFetchWEBPictures"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral:Clean;AutoFetchWEBPictures:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral:Make;AutoFetchWEBPictures:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
