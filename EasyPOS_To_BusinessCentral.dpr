@@ -37,7 +37,7 @@ begin
   ReportMemoryLeaksOnShutdown := TRUE;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TfrmMain, frmMain);
-  {$ELSE}
+{$ELSE}
   if not Application.DelayInitialize or Application.Installing then
     Application.Initialize;
   Application.CreateForm(TDM, DM);

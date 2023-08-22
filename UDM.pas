@@ -49,6 +49,8 @@ type
     QFinansTemp: TFDQuery;
     GetNextTransactionIDToBC: TFDStoredProc;
     GetNextTransactionIDToBCTRANSID: TIntegerField;
+    QFetchItems: TFDQuery;
+    QItemsTemp: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -69,7 +71,6 @@ type
     LF_BC_USERNAME: String;
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
-    BC_TransactionID: Integer;
 
     procedure AddToLog(aStringToWriteToLogFile: String);
     procedure InitialilzeProgram;
@@ -82,7 +83,7 @@ type
     procedure DoSyncronizeMovemmentsTransaction;
     procedure DoSyncronizeSalesTransactions;
     procedure FetchBCSettings;
-    procedure FetchNextTransID;
+    Function FetchNextTransID: Integer;
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
   public
@@ -148,7 +149,7 @@ var
   end;
 
 begin
-  AddToLog('DoMailFile - START');
+  AddToLog('  DoMailFile - START');
 
   lFromName := iniFile.ReadString('MAIL', 'From name', '');
   lFromMail := iniFile.ReadString('MAIL', 'From mail', '');
@@ -161,13 +162,13 @@ begin
   lUsername := iniFile.ReadString('MAIL', 'Username', '');
   lPassword := iniFile.ReadString('MAIL', 'Password', '');
 
-  AddToLog('  Filename: ' + aFileToAttach);
-  AddToLog('  MailFromName: ' + lFromName);
-  AddToLog('  MailFromMail: ' + lFromMail);
-  AddToLog('  MailReplyToName: ' + lReplyName);
-  AddToLog('  MailReplyToMail: ' + lReplyMail);
-  AddToLog('  MailSubject: ' + lSubject);
-  AddToLog('  MailReciever: ' + lRecipient);
+  AddToLog('    Filename: ' + aFileToAttach);
+  AddToLog('    MailFromName: ' + lFromName);
+  AddToLog('    MailFromMail: ' + lFromMail);
+  AddToLog('    MailReplyToName: ' + lReplyName);
+  AddToLog('    MailReplyToMail: ' + lReplyMail);
+  AddToLog('    MailSubject: ' + lSubject);
+  AddToLog('    MailReciever: ' + lRecipient);
 
   Result := FALSE;
   if (lRecipient <> '') AND (lHost <> '') then
@@ -200,7 +201,7 @@ begin
             except
               On E: Exception do
               begin
-                AddToLog('FEJL. Kan ikke afsende mail. ');
+                AddToLog('  FEJL. Kan ikke afsende mail. ');
                 AddToLog(E.Message);
               end;
             end;
@@ -220,9 +221,9 @@ begin
   end
   else
   begin
-    AddToLog('Host or reciever not set');
+    AddToLog('  Host or reciever not set');
   end;
-  AddToLog('DoMailFile - SLUT');
+  AddToLog('  DoMailFile - SLUT');
 end;
 
 procedure TDM.AddToLog(aStringToWriteToLogFile: String);
@@ -268,7 +269,7 @@ var
   lDatabase: string;
 begin
   try
-    AddToLog('Connecting to database');
+    AddToLog('  Connecting to database');
 
     lServer := Copy(EasyPOS_Database, 1, POS(':', EasyPOS_Database) - 1);
     lDatabase := Copy(EasyPOS_Database, POS(':', EasyPOS_Database) + 1, length(EasyPOS_Database) - POS(':', EasyPOS_Database));
@@ -281,17 +282,17 @@ begin
     dbMain.Params.Add('User_Name=' + EasyPOS_Database_User);
     dbMain.Params.Add('Password=' + EasyPOS_Database_Password);
     dbMain.Open;
-    AddToLog('Connected to database');
+    AddToLog('  Connected to database');
 
     FetchBCSettings;
-    AddToLog('Settings fetched');
+    AddToLog('  Settings fetched');
 
     Result := TRUE;
   except
     on E: Exception do
     begin
       Result := FALSE;
-      AddToLog('ERROR (Connect DB)!');
+      AddToLog('  ERROR (Connect DB)!');
       AddToLog(E.Message);
     end;
   end;
@@ -304,28 +305,29 @@ begin
     if (tnMain.Active) then
       tnMain.Commit;
     dbMain.Close;
-    AddToLog('Disconnected to database');
+    AddToLog('  Disconnected to database');
   except
     on E: Exception do
     begin
-      AddToLog('ERROR (Disconnect DB)!');
+      AddToLog('  ERROR (Disconnect DB)!');
       AddToLog(E.Message);
     end;
   end;
 end;
 
-procedure TDM.FetchNextTransID;
+Function TDM.FetchNextTransID: Integer;
 begin
   AddToLog('Fetching next transaction.');
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
-  BC_TransactionID := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
-  AddToLog(Format('  Transaction ID: %d.', [BC_TransactionID]))
+  Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
+  AddToLog(Format('  Transaction ID: %d.', [Result]))
 end;
 
 procedure TDM.FetchBCSettings;
 begin
   AddToLog('  Fetching Business Central settings');
+  QFinansTemp.SQL.Clear;
   QFinansTemp.SQL.Add('Select ');
   QFinansTemp.SQL.Add('  UNDERAFDELING.BC_BASEURL, ');
   QFinansTemp.SQL.Add('  UNDERAFDELING.BC_PORT, ');
@@ -396,6 +398,7 @@ begin
     end;
   end;
   AddToLog('Log folder has been cleared');
+  AddToLog('  ');
 end;
 
 procedure TDM.DoSyncronizeFinansCialRecords;
@@ -411,11 +414,10 @@ var
   lErrorCounter: Integer;
   lText: string;
   lDaysToLookAfterRecords: Integer;
+  BC_TransactionID: Integer;
 
   procedure CreateAndExportFinancialRecord;
   var
-    yyyy, mmmm, dddd: Word;
-    hh, mm, mss, ss: Word;
     lkmCashstatement: TkmCashstatement;
     lStr: string;
     ExponGV: Boolean;
@@ -474,9 +476,6 @@ var
     try
       lkmCashstatement.transId := BC_TransactionID;
       lkmCashstatement.epId := QFetchFinancialRecords.FieldByName('ID').AsInteger;
-
-      DecodeDate(NOW, yyyy, mmmm, dddd);
-      DecodeTime(NOW, hh, mm, ss, mss);
 
       lkmCashstatement.transDato := FormatDateTime('dd-mm-yyyy', NOW);
       lkmCashstatement.transTid := FormatDateTime('hh:mm:ss', NOW);
@@ -668,40 +667,38 @@ var
 
   end;
 
-
-    procedure MarkRecordAsHandled;
-    begin
-      AddToLog('  Mark selected records as handled');
-      QFinansTemp.SQL.Clear;
-      QFinansTemp.SQL.Add('Update Posteringer set Behandlet=Behandlet+1 Where Dato >= :PStartDato and Dato <= :PSlutDato;');
-      QFinansTemp.ParamByName('PStartDato').AsDateTime :=QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime;
-      QFinansTemp.ParamByName('PSlutDato').AsDateTime :=QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime;
-      QFinansTemp.ExecSQL;
-    end;
-
+  procedure MarkRecordAsHandled;
+  begin
+    AddToLog('  Mark selected records as handled');
+    QFinansTemp.SQL.Clear;
+    QFinansTemp.SQL.Add('Update Posteringer set Behandlet=Behandlet+1 Where Dato >= :PStartDato and Dato <= :PSlutDato;');
+    QFinansTemp.ParamByName('PStartDato').AsDateTime := QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime;
+    QFinansTemp.ParamByName('PSlutDato').AsDateTime := QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime;
+    QFinansTemp.ExecSQL;
+  end;
 
 begin
   AddToLog('DoSyncronizeFinansCialRecords - BEGIN');
   if (ConnectToDB) then
   begin
-    AddToLog('TBusinessCentralSetup.Create');
+    AddToLog('  TBusinessCentralSetup.Create');
     lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
     try
-      AddToLog('TBusinessCentral.Create');
+      AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
       try
-        if (NOT (tnMain.Active)) then
+        if (NOT(tnMain.Active)) then
           tnMain.StartTransaction;
 
-        lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords','Days to look for records',5);
+        lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
         lFromDateAndTime := NOW - lDaysToLookAfterRecords;
         lToDateAndTime := NOW;
 
-        AddToLog(Format('Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+        AddToLog(Format('  Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
         QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
         QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
-        QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder+'FinancialRecords.SQL');
+        QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder + 'FinancialRecords.SQL');
         QFetchFinancialRecords.Open;
         QFetchFinancialRecords.FetchAll;
 
@@ -713,7 +710,7 @@ begin
         if (NOT(QFetchFinancialRecords.EOF)) then
         begin
           // At least 1 record is there - fetch next transactions UD
-          FetchNextTransID;
+          BC_TransactionID := FetchNextTransID;
           // Iterate through result set
           while (NOT(QFetchFinancialRecords.EOF)) do
           begin
@@ -723,12 +720,12 @@ begin
           AddToLog('  Iteration done');
           MarkRecordAsHandled;
           AddToLog('  Routine done');
-          iniFile.WriteDateTime('FinancialRecords','Last time there was sync to BC',NOW)
+          iniFile.WriteDateTime('FinancialRecords', 'Last time there was sync to BC', NOW)
         end
         else
         begin
           // NO records selected
-          AddToLog('No records');
+          AddToLog('  No records');
         end;
 
         QFetchFinancialRecords.Close;
@@ -743,15 +740,15 @@ begin
           lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
             'Vedhæftet er en fil med information' + #13#10;
           SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
-          //Rename error file
+          // Rename error file
           TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
         end;
       finally
-        AddToLog('TBusinessCentral - Free');
+        AddToLog('  TBusinessCentral - Free');
         FReeAndNil(lBusinessCentral);
       end;
     finally
-      AddToLog('TBusinessCentralSetup - Free');
+      AddToLog('  TBusinessCentralSetup - Free');
       FReeAndNil(lBusinessCentralSetup);
     end;
 
@@ -762,12 +759,243 @@ begin
   begin
   end;
   AddToLog('DoSyncronizeFinansCialRecords - END');
+  AddToLog('  ');
 end;
 
 procedure TDM.DoSyncronizeItems;
+var
+  lBusinessCentralSetup: TBusinessCentralSetup;
+  lBusinessCentral: TBusinessCentral;
+  lDaysToLookAfterRecords: Integer;
+  lFromDateAndTime: Extended;
+  lToDateAndTime: Extended;
+  lExportCounterHeadItems: Integer;
+  lExportCounterVariants: Integer;
+  lErrorCounter: Integer;
+  lText: string;
+  lErrorFileName: string;
+  BC_ItemsTransactionID: Integer;
+  BC_VariantsTransactionID: Integer;
+  lCurrentHeadItem: String;
+  lDepartment: string;
+
+  procedure CreateAndExportItems;
+  var
+    lkmItem: TkmItem;
+    lFloat: Double;
+    lResponse: TBusinessCentral_Response;
+    ContinueWithVariants: Boolean;
+    lErrorString: string;
+    lkmVariantId: TkmVariantId;
+    Afbrudt: Boolean;
+    lJSONStr: string;
+  begin
+    ContinueWithVariants := TRUE;
+    if (lCurrentHeadItem <> QFetchItems.FieldByName('VareID').AsString) then
+    begin
+      AddToLog(Format('Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
+      INC(lExportCounterHeadItems);
+
+      lkmItem := TkmItem.Create;
+      try
+        lkmItem.transId := BC_ItemsTransactionID;
+        lkmItem.vareId := QFetchItems.FieldByName('VareID').AsString;
+        lkmItem.beskrivelse := QFetchItems.FieldByName('Beskrivelse').AsString;
+        lkmItem.model := QFetchItems.FieldByName('Model').AsString;
+        lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
+        lkmItem.salgspris := QFetchItems.FieldByName('SalgsPris').AsFloat;
+        lkmItem.leverandRKode := QFetchItems.FieldByName('LeverandorKode').AsString;
+        lkmItem.varegruppe := QFetchItems.FieldByName('Varegruppe').AsString;
+        lkmItem.status := '0';
+        lkmItem.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+        lkmItem.transTid := FormatDateTime('hh:mm:ss', NOW);
+        lkmItem.tariffNo := QFetchItems.FieldByName('INTRASTAT').AsString;
+        lkmItem.countryRegionOfOriginCode := QFetchItems.FieldByName('Country').AsString;
+        if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
+          lkmItem.netWeight := lFloat
+        else
+          lkmItem.netWeight := 0;
+
+        lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
+
+{$IFDEF APPMODE}
+        AddToLog(Format('  Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+
+{$ELSE}
+        if (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse)) then
+        begin
+          ContinueWithVariants := TRUE;
+          AddToLog(Format('  Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+        end
+        else
+        begin
+          INC(lErrorCounter);
+          lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
+            '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
+            '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+            '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
+          ContinueWithVariants := FALSE;
+        end;
+        FReeAndNil(lResponse);
+{$ENDIF}
+      finally
+        lkmItem.Free;
+      end;
+
+      if (ContinueWithVariants) then
+      begin
+        lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
+
+        AddToLog(Format('  Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
+        QItemsTemp.SQL.Clear;
+        QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
+        QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
+        QItemsTemp.ExecSQL;
+        AddToLog(Format('  Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
+      end;
+    end;
+
+    if (ContinueWithVariants) then
+    begin
+      Afbrudt := FALSE;
+
+      INC(lExportCounterVariants);
+      lkmVariantId := TkmVariantId.Create;
+      try
+        lkmVariantId.transId := BC_VariantsTransactionID;
+        lkmVariantId.vareId := QFetchItems.FieldByName('VareID').AsString;
+        lkmVariantId.variantId := QFetchItems.FieldByName('VariantID').AsString;
+        lkmVariantId.farve := QFetchItems.FieldByName('Farve').AsString;
+        lkmVariantId.stRrelse := QFetchItems.FieldByName('Storrelse').AsString;
+        lkmVariantId.lNgde := QFetchItems.FieldByName('Laengde').AsString;
+        lkmVariantId.status := '0';
+        lkmVariantId.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+        lkmVariantId.transTid := FormatDateTime('hh:mm:ss', NOW);
+
+        lJSONStr := GetDefaultSerializer.SerializeObject(lkmVariantId);
+
+{$IFDEF APPMODE}
+        AddToLog(Format('  Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+{$ELSE}
+        // POST (INsert den)
+        if (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse)) then
+        begin
+          AddToLog(Format('  Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+        end
+        else
+        begin
+          INC(lErrorCounter);
+          lErrorString := 'Unexpected error while inserting variant in Business Central. ' + #13#10 +
+            '  Code: ' + IntToStr((lResponse as TBusinessCentral_ErrorResponse).StatusCode) + #13#10 +
+            '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
+          Afbrudt := TRUE;
+        end;
+        FReeAndNil(lResponse);
+{$ENDIF}
+      finally
+        FReeAndNil(lkmVariantId);
+      end;
+
+      if (NOT(Afbrudt)) then
+      begin
+        AddToLog(Format('Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
+
+        QItemsTemp.SQL.Clear;
+        QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
+        QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
+        QItemsTemp.ExecSQL;
+      end;
+    end;
+  end;
+
 begin
   AddToLog('DoSyncronizeItems - BEGIN');
+  if (ConnectToDB) then
+  begin
+    AddToLog('  TBusinessCentralSetup.Create');
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    try
+      AddToLog('  TBusinessCentral.Create');
+      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+      try
+        if (NOT(tnMain.Active)) then
+          tnMain.StartTransaction;
+
+        lDaysToLookAfterRecords := iniFile.ReadInteger('Items', 'Days to look for records', 5);
+        lDepartment := iniFile.ReadString('Items', 'Department', '');
+        lFromDateAndTime := NOW - lDaysToLookAfterRecords;
+        lToDateAndTime := NOW;
+
+        AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+
+        QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
+        QFetchItems.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
+        QFetchItems.ParamByName('PAfdeling_ID').AsString := lDepartment;
+        QFetchItems.SQL.SaveToFile(SQLLogFileFolder + 'Items.SQL');
+        QFetchItems.Open;
+        QFetchItems.FetchAll;
+
+        AddToLog(Format('  Items fetched: %d', [QFetchItems.RecordCount]));
+
+        lExportCounterHeadItems := 0;
+        lExportCounterVariants := 0;
+        lErrorCounter := 0;
+        lCurrentHeadItem := '';
+
+        if (NOT(QFetchItems.EOF)) then
+        begin
+          // At least 1 record is there - fetch next transactions UD
+          BC_ItemsTransactionID := FetchNextTransID;
+          BC_VariantsTransactionID := FetchNextTransID;
+          // Iterate through result set
+          while (NOT(QFetchItems.EOF)) do
+          begin
+            CreateAndExportItems;
+            QFetchItems.Next;
+          end;
+          AddToLog('  Iteration done');
+          AddToLog(Format('  Exported %d head items and %d variants',[lExportCounterHeadItems, lExportCounterVariants]));
+          AddToLog('  Routine done');
+          iniFile.WriteDateTime('Items', 'Last time there was sync to BC', NOW)
+        end
+        else
+        begin
+          // NO records selected
+          AddToLog('  No records');
+        end;
+
+        QFetchItems.Close;
+        if (tnMain.Active) then
+          tnMain.Commit;
+
+        if (lErrorCounter > 0) then
+        begin
+          // Some error occured. Send an mail to user
+          // Send mail with file LogFolder + lErrorName
+          // Rename file
+          lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
+            'Vedhæftet er en fil med information' + #13#10;
+          SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
+          // Rename error file
+          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
+        end;
+      finally
+        AddToLog('  TBusinessCentral - Free');
+        FReeAndNil(lBusinessCentral);
+      end;
+    finally
+      AddToLog('  TBusinessCentralSetup - Free');
+      FReeAndNil(lBusinessCentralSetup);
+    end;
+
+    DisconnectFromDB;
+
+  end
+  else
+  begin
+  end;
   AddToLog('DoSyncronizeItems - END');
+  AddToLog('  ');
 end;
 
 procedure TDM.DoSyncronizeSalesTransactions;
@@ -805,15 +1033,16 @@ begin
     AddToLog(Format('Syncronize Items: %s', [lItems.ToString]));
     AddToLog(Format('Syncronize Sales Transactions: %s', [lSalesTransactions.ToString]));
     AddToLog(Format('Syncronize Movements Transaction: %s', [lMovementsTransactions.ToString]));
-
-    if lSyncroniseFinancialRecords then
-    begin
-      DoSyncronizeFinansCialRecords;
-    end;
+    AddToLog('  ');
 
     if lItems then
     begin
       DoSyncronizeItems;
+    end;
+
+    if lSyncroniseFinancialRecords then
+    begin
+      DoSyncronizeFinansCialRecords;
     end;
 
     if lSalesTransactions then

@@ -474,8 +474,8 @@ object DM: TDM
       '    7,'
       '    /* Posttype*/'
       '    18 /* ID */')
-    Left = 240
-    Top = 159
+    Left = 72
+    Top = 463
     ParamData = <
       item
         Name = 'PSTARTDATO'
@@ -491,15 +491,15 @@ object DM: TDM
     Transaction = tnMain
     FetchOptions.AssignedValues = [evAutoFetchAll]
     FetchOptions.AutoFetchAll = afDisable
-    Left = 240
-    Top = 223
+    Left = 72
+    Top = 527
   end
   object GetNextTransactionIDToBC: TFDStoredProc
     Connection = dbMain
     Transaction = tnMain
     StoredProcName = 'GETNAVISION_TRANSID'
-    Left = 392
-    Top = 288
+    Left = 336
+    Top = 208
     ParamData = <
       item
         Position = 1
@@ -517,5 +517,74 @@ object DM: TDM
       FieldName = 'TRANSID'
       Origin = 'TRANSID'
     end
+  end
+  object QFetchItems: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'SELECT DISTINCT'
+      '    v.VARENAVN1 AS Beskrivelse,'
+      '    vfsd.VEJETKOSTPRISSTK AS Kostpris,'
+      '    l.V509INDEX AS LeverandorKode,'
+      '    t.VAREFRVSTRNR AS VareID,'
+      '    v.MODEL AS Model,'
+      '    vg.V509INDEX AS Varegruppe,'
+      '    vfsd.SALGSPRISSTK AS Salgspris,'
+      '    vv.FARVE_NAVN AS Farve,'
+      '    vv.STOERRELSE_NAVN AS Storrelse,'
+      '    vv.LAENGDE_NAVN AS Laengde,'
+      '    vv.V509INDEX AS VariantID,'
+      '    v.KATEGORI1 AS Country,'
+      '    v.KATEGORI2 AS Weigth,'
+      '    v.INTRASTAT'
+      'FROM transaktioner t'
+      '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR)'
+      
+        '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VA' +
+        'REFRVSTRNR AND'
+      '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND'
+      '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND'
+      '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND'
+      '          vfsd.afdeling_ID = :PAfdeling_ID)'
+      
+        '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR ' +
+        'AND'
+      '          vv.FARVE_NAVN = t.FARVE_NAVN AND'
+      '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND'
+      '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND'
+      '          vv.EKSPORTERET = 0)'
+      '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN)'
+      '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID)'
+      'WHERE'
+      '    t.dato >= :PStartDato AND'
+      '    t.dato <= :PSlutDato AND'
+      '    t.ART IN (0, 1, 11, 14)'
+      'ORDER BY'
+      '    4,'
+      '    11  '
+      #9)
+    Left = 560
+    Top = 408
+    ParamData = <
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PSTARTDATO'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PSLUTDATO'
+        ParamType = ptInput
+      end>
+  end
+  object QItemsTemp: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 552
+    Top = 471
   end
 end
