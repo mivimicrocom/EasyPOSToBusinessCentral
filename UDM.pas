@@ -58,6 +58,7 @@ type
     EasyPOS_Database_User: string;
     EasyPOS_Database_Password: string;
     LogFileFolder: String;
+    SQLLogFileFolder: String;
 
     EasyPOS_Department: String;
     EasyPOS_Machine: string;
@@ -75,7 +76,7 @@ type
     procedure DoHandleEksportToBusinessCentral;
     function ConnectToDB: Boolean;
     procedure DisconnectFromDB;
-    procedure DoClearLogFolder;
+    procedure DoClearFolder(aFolder: string; aFile: string);
     procedure DoSyncronizeFinansCialRecords;
     procedure DoSyncronizeItems;
     procedure DoSyncronizeMovemmentsTransaction;
@@ -83,7 +84,7 @@ type
     procedure FetchBCSettings;
     procedure FetchNextTransID;
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
-    function SendErrorMail(aFileToAttach: string; aSection: string; aText: String) : boolean;
+    function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
   public
     { Public declarations }
     iniFile: TIniFile;
@@ -110,7 +111,7 @@ uses
 const
   NumberOfDays = 21;
 
-function TDM.SendErrorMail(aFileToAttach: string; aSection: string; aText: String) : boolean;
+function TDM.SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
 var
   lSendEMailMailSetup: TSendEMailMailSetup;
   lSendEMailSMTPSetup: TSendEMailSMTPSetup;
@@ -194,7 +195,15 @@ begin
           lSendEMail := TSendEMail.Create(lSendEMailSMTPSetup);
           try
 
-            Result := lSendEMail.SendEMail(lSendEMailMailSetup, aError);
+            try
+              Result := lSendEMail.SendEMail(lSendEMailMailSetup, aError);
+            except
+              On E: Exception do
+              begin
+                AddToLog('FEJL. Kan ikke afsende mail. ');
+                AddToLog(E.Message);
+              end;
+            end;
 
           finally
             lSendEMail.Free;
@@ -343,17 +352,17 @@ begin
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
 end;
 
-procedure TDM.DoClearLogFolder;
+procedure TDM.DoClearFolder(aFolder: string; aFile: string);
 var
   lFilSti: string;
   lFilNavn: string;
   FileAttrs: Integer;
   sr: TSearchRec;
 begin
-  AddToLog('Do clear log folders');
-  lFilSti := LogFileFolder;
+  AddToLog(Format('Do clear folder %s for files %s', [aFolder, aFile]));
+  lFilSti := aFolder;
   // Set log file wildcard
-  lFilNavn := lFilSti + 'Log*.*';
+  lFilNavn := lFilSti + aFile;
   FileAttrs := faAnyFile;
   // Find first logfile
   if FindFirst(lFilNavn, FileAttrs, sr) = 0 then
@@ -401,6 +410,7 @@ var
   lExportCounter: Integer;
   lErrorCounter: Integer;
   lText: string;
+  lDaysToLookAfterRecords: Integer;
 
   procedure CreateAndExportFinancialRecord;
   var
@@ -457,11 +467,6 @@ var
         CloseFile(lExportFile);
       except
       end;
-    end;
-
-    procedure MarkRecordAsHandled;
-    begin
-
     end;
 
   begin
@@ -632,38 +637,28 @@ var
 {$IFDEF APPMODE}
       AddToLog(Format('  Record: %d - ' + lJSONStr, [lExportCounter]));
       WriteEksportedRecordToTextfile;
-      MarkRecordAsHandled;
-
-      lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
-        '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
-        '  Code: ' + 'Appmode' + #13#10 +
-        '  Message: ' + #13#10 + 'Appmode' + #13#10 +
-        '  JSON: ' + lJSONStr + #13#10;
-      AddToLog(lErrotString);
-      INC(lErrorCounter);
-      AddToErrorLog(lErrotString, lErrorFileName);
 {$ELSE}
-
-      // POST (INsert den)
 {$IFDEF DEBUG}
       if TRUE then
 {$ENDIF}
 {$IFDEF RELEASE}
+        // POST (INsert den)
         if (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse)) then
 {$ENDIF}
         begin
-          AddToLog('  ' + lStr);
+          AddToLog(Format('  Record: %d - ' + lJSONStr, [lExportCounter]));
           WriteEksportedRecordToTextfile;
-          MarkRecordAsHandled;
         end
         else
         begin
           lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
             '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
-            '  Code: ' + IntToStr((lResponse as TBusinessCentral_ErrorResponse).StatusCode) + #13#10 +
-            '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText;
+            '  Code: ' + 'Appmode' + #13#10 +
+            '  Message: ' + #13#10 + 'Appmode' + #13#10 +
+            '  JSON: ' + lJSONStr + #13#10;
           AddToLog(lErrotString);
-          AddToErrorLog(lErrotString);
+          INC(lErrorCounter);
+          AddToErrorLog(lErrotString, lErrorFileName);
         end;
       FReeAndNil(lResponse);
 {$ENDIF}
@@ -672,6 +667,18 @@ var
     end;
 
   end;
+
+
+    procedure MarkRecordAsHandled;
+    begin
+      AddToLog('  Mark selected records as handled');
+      QFinansTemp.SQL.Clear;
+      QFinansTemp.SQL.Add('Update Posteringer set Behandlet=Behandlet+1 Where Dato >= :PStartDato and Dato <= :PSlutDato;');
+      QFinansTemp.ParamByName('PStartDato').AsDateTime :=QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime;
+      QFinansTemp.ParamByName('PSlutDato').AsDateTime :=QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime;
+      QFinansTemp.ExecSQL;
+    end;
+
 
 begin
   AddToLog('DoSyncronizeFinansCialRecords - BEGIN');
@@ -683,57 +690,68 @@ begin
       AddToLog('TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
       try
-{$IFDEF DEBUG}
-        lFromDateAndTime := NOW - 200;
-{$ELSE}
-        lFromDateAndTime := NOW - 1;
-{$ENDIF}
+        if (NOT (tnMain.Active)) then
+          tnMain.StartTransaction;
+
+        lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords','Days to look for records',5);
+        lFromDateAndTime := NOW - lDaysToLookAfterRecords;
         lToDateAndTime := NOW;
+
         AddToLog(Format('Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+
         QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
         QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
+        QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder+'FinancialRecords.SQL');
         QFetchFinancialRecords.Open;
         QFetchFinancialRecords.FetchAll;
+
         AddToLog(Format('  Records fetched: %d', [QFetchFinancialRecords.RecordCount]));
+
+        lExportCounter := 0;
+        lErrorCounter := 0;
 
         if (NOT(QFetchFinancialRecords.EOF)) then
         begin
           // At least 1 record is there - fetch next transactions UD
           FetchNextTransID;
-          lExportCounter := 0;
-          lErrorCounter := 0;
           // Iterate through result set
           while (NOT(QFetchFinancialRecords.EOF)) do
           begin
             CreateAndExportFinancialRecord;
             QFetchFinancialRecords.Next;
           end;
+          AddToLog('  Iteration done');
+          MarkRecordAsHandled;
+          AddToLog('  Routine done');
+          iniFile.WriteDateTime('FinancialRecords','Last time there was sync to BC',NOW)
         end
         else
         begin
+          // NO records selected
           AddToLog('No records');
         end;
+
+        QFetchFinancialRecords.Close;
+        if (tnMain.Active) then
+          tnMain.Commit;
 
         if (lErrorCounter > 0) then
         begin
           // Some error occured. Send an mail to user
           // Send mail with file LogFolder + lErrorName
           // Rename file
-
           lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
-                   'Vedhæftet er en fil med information' + #13#10;
-          SendErrorMail (LogFileFolder + lErrorFileName, 'Finansposter', ltext);
-          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt',[FormatDateTime('ddmmyyyy_hhmmss',NOW)]))
+            'Vedhæftet er en fil med information' + #13#10;
+          SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
+          //Rename error file
+          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
         end;
-
-        QFetchFinancialRecords.Close;
-
       finally
         AddToLog('TBusinessCentral - Free');
         FReeAndNil(lBusinessCentral);
       end;
     finally
-      AddToLog('TBusinessCentralSetup - Freee');
+      AddToLog('TBusinessCentralSetup - Free');
       FReeAndNil(lBusinessCentralSetup);
     end;
 
@@ -774,7 +792,9 @@ begin
   // This will check what to syncronize and do it.
   try
     DM.InitialilzeProgram;
-    DoClearLogFolder;
+    DoClearFolder(LogFileFolder, 'Log*.*');
+    DoClearFolder(LogFileFolder, 'Error*.*');
+    DoClearFolder(LogFileFolder + 'FinansEksport\', 'EkspFinancialRecordsToBC*.*');
 
     lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
     lItems := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
@@ -850,8 +870,10 @@ begin
 
   glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
   LogFileFolder := iniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
-  LogFileFolder := 'c:\EasyPOSToBC\Logs\';
+  SQLLogFileFolder := LogFileFolder + 'SQL\';
+
   ForceDirectories(LogFileFolder);
+  ForceDirectories(SQLLogFileFolder);
 
   AddToLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' +
     IntToStr(PrgVers1) + '.' + IntToStr(PrgVers2) + '.' + IntToStr(PrgVers3) + '.' + IntToStr(PrgVers4));

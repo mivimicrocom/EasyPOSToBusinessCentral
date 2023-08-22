@@ -35,6 +35,7 @@ object DM: TDM
   end
   object QFetchFinancialRecords: TFDQuery
     Connection = dbMain
+    Transaction = tnMain
     FetchOptions.AssignedValues = [evAutoFetchAll]
     FetchOptions.AutoFetchAll = afDisable
     SQL.Strings = (
@@ -487,6 +488,7 @@ object DM: TDM
   end
   object QFinansTemp: TFDQuery
     Connection = dbMain
+    Transaction = tnMain
     FetchOptions.AssignedValues = [evAutoFetchAll]
     FetchOptions.AutoFetchAll = afDisable
     Left = 240
@@ -494,6 +496,7 @@ object DM: TDM
   end
   object GetNextTransactionIDToBC: TFDStoredProc
     Connection = dbMain
+    Transaction = tnMain
     StoredProcName = 'GETNAVISION_TRANSID'
     Left = 392
     Top = 288
