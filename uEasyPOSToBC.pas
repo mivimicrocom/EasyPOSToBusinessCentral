@@ -51,17 +51,17 @@ procedure TEasyPOSToBusinessCentralService.ServiceAfterInstall(Sender: TService)
 var
   Reg: TRegistry;
 begin
-    Reg := TRegistry.Create(KEY_READ or KEY_WRITE);
-    try
-      Reg.RootKey := HKEY_LOCAL_MACHINE;
-      if Reg.OpenKey('\SYSTEM\CurrentControlSet\Services\' + Name, false) then
-      begin
-        Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to BUsiness Central.');
-        Reg.CloseKey;
-      end;
-    finally
-      Reg.Free;
+  Reg := TRegistry.Create(KEY_READ or KEY_WRITE);
+  try
+    Reg.RootKey := HKEY_LOCAL_MACHINE;
+    if Reg.OpenKey('\SYSTEM\CurrentControlSet\Services\' + Name, false) then
+    begin
+      Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to BUsiness Central.');
+      Reg.CloseKey;
     end;
+  finally
+    Reg.Free;
+  end;
 end;
 
 procedure TEasyPOSToBusinessCentralService.ServiceStart(Sender: TService; var Started: Boolean);
