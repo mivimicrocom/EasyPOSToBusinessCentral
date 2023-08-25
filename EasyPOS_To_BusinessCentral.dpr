@@ -1,17 +1,17 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-  {$IFDEF APPMODE}
+{$IFDEF APPMODE}
   forms,
   System.SysUtils,
-  {$ELSE}
+{$ELSE}
   Vcl.SvcMgr,
-  {$ENDIF }
-  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService},
-  UDM in 'UDM.pas' {DM: TDataModule},
-  {$IFDEF APPMODE}
-  uMain in 'uMain.pas' {frmMain},
-  {$ENDIF }
+{$ENDIF }
+  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService} ,
+  UDM in 'UDM.pas' {DM: TDataModule} ,
+{$IFDEF APPMODE}
+  uMain in 'uMain.pas' {frmMain} ,
+{$ENDIF }
   uBusinessCentralIntegration in 'Business-Central\uBusinessCentralIntegration.pas' {$R *.RES},
   uSendEMail in 'AfsendMail\uSendEMail.pas';
 

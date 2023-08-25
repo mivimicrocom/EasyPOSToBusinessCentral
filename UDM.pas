@@ -53,7 +53,7 @@ type
     QItemsTemp: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
-    { Private declarations }
+    {Private declarations}
     glTimer: Integer;
 
     EasyPOS_Database: string;
@@ -82,12 +82,12 @@ type
     procedure DoSyncronizeItems;
     procedure DoSyncronizeMovemmentsTransaction;
     procedure DoSyncronizeSalesTransactions;
-    procedure FetchBCSettings;
-    Function FetchNextTransID: Integer;
+    function FetchBCSettings: Boolean;
+    Function FetchNextTransID(aTransactionIDUSedFor: String): Integer;
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
   public
-    { Public declarations }
+    {Public declarations}
     iniFile: TIniFile;
   end;
 
@@ -98,7 +98,7 @@ implementation
 
 {%CLASSGROUP 'Vcl.Controls.TControl'}
 {$R *.dfm}
-{ TDM }
+{TDM}
 
 uses
   System.IOUtils,
@@ -269,6 +269,8 @@ var
   lDatabase: string;
 begin
   try
+    AddToLog('  Settings fetched');
+
     AddToLog('  Connecting to database');
 
     lServer := Copy(EasyPOS_Database, 1, POS(':', EasyPOS_Database) - 1);
@@ -283,11 +285,15 @@ begin
     dbMain.Params.Add('Password=' + EasyPOS_Database_Password);
     dbMain.Open;
     AddToLog('  Connected to database');
-
-    FetchBCSettings;
-    AddToLog('  Settings fetched');
-
-    Result := TRUE;
+    if (FetchBCSettings) then
+    begin
+      Result := TRUE;
+    end
+    else
+    begin
+      Result := FALSE;
+      AddToLog('  Business Central settings not set');
+    end;
   except
     on E: Exception do
     begin
@@ -315,43 +321,68 @@ begin
   end;
 end;
 
-Function TDM.FetchNextTransID: Integer;
+Function TDM.FetchNextTransID(aTransactionIDUSedFor: String): Integer;
 begin
-  AddToLog('Fetching next transaction.');
+  AddToLog(Format('  Fetching next transaction for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
-  AddToLog(Format('  Transaction ID: %d.', [Result]))
+  AddToLog(Format('    Transaction ID: %d.', [Result]))
 end;
 
-procedure TDM.FetchBCSettings;
+function TDM.FetchBCSettings: Boolean;
 begin
   AddToLog('  Fetching Business Central settings');
-  QFinansTemp.SQL.Clear;
-  QFinansTemp.SQL.Add('Select ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_BASEURL, ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_PORT, ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_COMPANY_URL, ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_USERNAME, ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_PASSWORD, ');
-  QFinansTemp.SQL.Add('  UNDERAFDELING.BC_ACTIVECOMPANYID ');
-  QFinansTemp.SQL.Add('from underafdeling where afdeling_ID=:PAfdeling_ID And Navn=:PNavn;');
-  QFinansTemp.ParamByName('PAfdeling_ID').AsString := EasyPOS_Department;
-  QFinansTemp.ParamByName('PNavn').AsString := EasyPOS_Machine;
-  QFinansTemp.Open;
-  LF_BC_BASEURL := QFinansTemp.FieldByName('BC_BASEURL').AsString;
-  LF_BC_PORT := QFinansTemp.FieldByName('BC_PORT').AsInteger;
-  LF_BC_COMPANY_URL := QFinansTemp.FieldByName('BC_COMPANY_URL').AsString;
-  LF_BC_USERNAME := QFinansTemp.FieldByName('BC_USERNAME').AsString;
-  LF_BC_PASSWORD := QFinansTemp.FieldByName('BC_PASSWORD').AsString;
-  LF_BC_ACTIVECOMPANYID := QFinansTemp.FieldByName('BC_ACTIVECOMPANYID').AsString;
-  QFinansTemp.Close;
+
+  LF_BC_BASEURL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_BASEURL', '');
+  LF_BC_PORT := iniFile.ReadInteger('BUSINESS CENTRAL', 'BC_PORT', 0);
+  LF_BC_COMPANY_URL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_COMPANY_URL', '');
+  LF_BC_USERNAME := iniFile.ReadString('BUSINESS CENTRAL', 'BC_USERNAME', '');
+  LF_BC_PASSWORD := iniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
+  LF_BC_ACTIVECOMPANYID := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
+
+  if (LF_BC_BASEURL = '') AND
+    (LF_BC_PORT = 0) AND
+    (LF_BC_COMPANY_URL = '') AND
+    (LF_BC_USERNAME = '') AND
+    (LF_BC_PASSWORD = '') AND
+    (LF_BC_ACTIVECOMPANYID = '') then
+  begin
+    QFinansTemp.SQL.Clear;
+    QFinansTemp.SQL.Add('Select ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_BASEURL, ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_PORT, ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_COMPANY_URL, ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_USERNAME, ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_PASSWORD, ');
+    QFinansTemp.SQL.Add('  UNDERAFDELING.BC_ACTIVECOMPANYID ');
+    QFinansTemp.SQL.Add('from underafdeling where afdeling_ID=:PAfdeling_ID And Navn=:PNavn;');
+    QFinansTemp.ParamByName('PAfdeling_ID').AsString := EasyPOS_Department;
+    QFinansTemp.ParamByName('PNavn').AsString := EasyPOS_Machine;
+    QFinansTemp.Open;
+    LF_BC_BASEURL := QFinansTemp.FieldByName('BC_BASEURL').AsString;
+    LF_BC_PORT := QFinansTemp.FieldByName('BC_PORT').AsInteger;
+    LF_BC_COMPANY_URL := QFinansTemp.FieldByName('BC_COMPANY_URL').AsString;
+    LF_BC_USERNAME := QFinansTemp.FieldByName('BC_USERNAME').AsString;
+    LF_BC_PASSWORD := QFinansTemp.FieldByName('BC_PASSWORD').AsString;
+    LF_BC_ACTIVECOMPANYID := QFinansTemp.FieldByName('BC_ACTIVECOMPANYID').AsString;
+    QFinansTemp.Close;
+  end;
+
   AddToLog('  LF_BC_BASEURL: ' + LF_BC_BASEURL);
   AddToLog('  LF_BC_PORT: ' + LF_BC_PORT.ToString);
   AddToLog('  LF_BC_COMPANY_URL: ' + LF_BC_COMPANY_URL);
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
   AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
+
+  Result :=
+    ((LF_BC_BASEURL <> '') AND
+    (LF_BC_PORT <> 0) AND
+    (LF_BC_COMPANY_URL <> '') AND
+    (LF_BC_USERNAME <> '') AND
+    (LF_BC_PASSWORD <> '') AND
+    (LF_BC_ACTIVECOMPANYID <> ''));
 end;
 
 procedure TDM.DoClearFolder(aFolder: string; aFile: string);
@@ -427,7 +458,7 @@ var
     lErrotString: string;
     lJSONStr: string;
 
-    { TSI:IGNORE ON }
+    {TSI:IGNORE ON}
 
     function GetButiksID(lAfdNr: String): String;
     begin
@@ -710,7 +741,7 @@ begin
         if (NOT(QFetchFinancialRecords.EOF)) then
         begin
           // At least 1 record is there - fetch next transactions UD
-          BC_TransactionID := FetchNextTransID;
+          BC_TransactionID := FetchNextTransID('financial records');
           // Iterate through result set
           while (NOT(QFetchFinancialRecords.EOF)) do
           begin
@@ -718,7 +749,9 @@ begin
             QFetchFinancialRecords.Next;
           end;
           AddToLog('  Iteration done');
+{$IFNDEF APPMODE}
           MarkRecordAsHandled;
+{$ENDIF}
           AddToLog('  Routine done');
           iniFile.WriteDateTime('FinancialRecords', 'Last time there was sync to BC', NOW)
         end
@@ -754,9 +787,6 @@ begin
 
     DisconnectFromDB;
 
-  end
-  else
-  begin
   end;
   AddToLog('DoSyncronizeFinansCialRecords - END');
   AddToLog('  ');
@@ -793,7 +823,7 @@ var
     ContinueWithVariants := TRUE;
     if (lCurrentHeadItem <> QFetchItems.FieldByName('VareID').AsString) then
     begin
-      AddToLog(Format('Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
+      AddToLog(Format('  Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
       INC(lExportCounterHeadItems);
 
       lkmItem := TkmItem.Create;
@@ -819,13 +849,13 @@ var
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
 
 {$IFDEF APPMODE}
-        AddToLog(Format('  Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+        AddToLog(Format('    Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
 
 {$ELSE}
         if (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse)) then
         begin
           ContinueWithVariants := TRUE;
-          AddToLog(Format('  Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+          AddToLog(Format('    Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
         end
         else
         begin
@@ -846,12 +876,14 @@ var
       begin
         lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
 
-        AddToLog(Format('  Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
+        AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
+{$IFNDEF APPMODE}
         QItemsTemp.SQL.Clear;
         QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
         QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
         QItemsTemp.ExecSQL;
-        AddToLog(Format('  Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
+{$ENDIF}
+        AddToLog(Format('    Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
       end;
     end;
 
@@ -875,12 +907,12 @@ var
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmVariantId);
 
 {$IFDEF APPMODE}
-        AddToLog(Format('  Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+        AddToLog(Format('      Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
 {$ELSE}
         // POST (INsert den)
         if (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse)) then
         begin
-          AddToLog(Format('  Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+          AddToLog(Format('      Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
         end
         else
         begin
@@ -898,12 +930,14 @@ var
 
       if (NOT(Afbrudt)) then
       begin
-        AddToLog(Format('Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
+        AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
 
+{$IFNDEF APPMODE}
         QItemsTemp.SQL.Clear;
         QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
         QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
         QItemsTemp.ExecSQL;
+{$ENDIF}
       end;
     end;
   end;
@@ -945,8 +979,8 @@ begin
         if (NOT(QFetchItems.EOF)) then
         begin
           // At least 1 record is there - fetch next transactions UD
-          BC_ItemsTransactionID := FetchNextTransID;
-          BC_VariantsTransactionID := FetchNextTransID;
+          BC_ItemsTransactionID := FetchNextTransID('head items');
+          BC_VariantsTransactionID := FetchNextTransID('variants');
           // Iterate through result set
           while (NOT(QFetchItems.EOF)) do
           begin
@@ -954,7 +988,7 @@ begin
             QFetchItems.Next;
           end;
           AddToLog('  Iteration done');
-          AddToLog(Format('  Exported %d head items and %d variants',[lExportCounterHeadItems, lExportCounterVariants]));
+          AddToLog(Format('  Exported %d head items and %d variants', [lExportCounterHeadItems, lExportCounterVariants]));
           AddToLog('  Routine done');
           iniFile.WriteDateTime('Items', 'Last time there was sync to BC', NOW)
         end
@@ -989,10 +1023,6 @@ begin
     end;
 
     DisconnectFromDB;
-
-  end
-  else
-  begin
   end;
   AddToLog('DoSyncronizeItems - END');
   AddToLog('  ');
@@ -1080,7 +1110,7 @@ var
     if VerInfoSize = 0 then
     begin
       Dummy := GetLastError;
-    end; { if }
+    end; {if}
     GetMem(JvVerInf, VerInfoSize);
     GetFileVersionInfo(PChar(ParamStr(0)), 0, VerInfoSize, JvVerInf);
     VerQueryValue(JvVerInf, '\', Pointer(VerValue), VerValueSize);
