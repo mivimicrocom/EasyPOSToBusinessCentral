@@ -1,0 +1,3 @@
+[submodule "BusinessCentral-Integration"]
+	path = BusinessCentral-Integration
+	url = git@github.com:mivimicrocom/BusinessCentral-Integration.git
