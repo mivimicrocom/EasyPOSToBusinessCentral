@@ -1,5 +1,4 @@
 object DM: TDM
-  OldCreateOrder = True
   Height = 848
   Width = 1148
   object tiTimer: TTimer

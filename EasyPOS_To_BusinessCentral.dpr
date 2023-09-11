@@ -1,7 +1,8 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-{$IFDEF APPMODE}
+  FastMM4,
+{$IFNDEF RELEASE}
   forms,
   System.SysUtils,
 {$ELSE}
@@ -9,11 +10,12 @@ uses
 {$ENDIF }
   uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService} ,
   UDM in 'UDM.pas' {DM: TDataModule} ,
-{$IFDEF APPMODE}
+{$IFNDEF RELEASE}
   uMain in 'uMain.pas' {frmMain} ,
 {$ENDIF }
-  uBusinessCentralIntegration in 'Business-Central\uBusinessCentralIntegration.pas' {$R *.RES},
-  uSendEMail in 'AfsendMail\uSendEMail.pas';
+  uSendEMail in 'AfsendMail\uSendEMail.pas',
+  uBusinessCentralIntegration in 'BusinessCentral-Integration\uBusinessCentralIntegration.pas',
+  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany};
 
 {$R *.RES}
 
@@ -33,7 +35,7 @@ begin
   //
   // Application.DelayInitialize := True;
   //
-{$IFDEF APPMODE}
+{$IFNDEF RELEASE}
   ReportMemoryLeaksOnShutdown := TRUE;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TfrmMain, frmMain);
@@ -42,7 +44,7 @@ begin
     Application.Initialize;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
-{$ENDIF}
+b{$ENDIF}
   Application.Run;
 
 end.

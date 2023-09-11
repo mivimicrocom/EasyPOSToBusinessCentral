@@ -53,7 +53,7 @@ type
     QItemsTemp: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
-    {Private declarations}
+    { Private declarations }
     glTimer: Integer;
 
     EasyPOS_Database: string;
@@ -64,6 +64,8 @@ type
 
     EasyPOS_Department: String;
     EasyPOS_Machine: string;
+
+    OnlyTestRoutine: Boolean;
 
     LF_BC_BASEURL: String;
     LF_BC_PORT: Integer;
@@ -87,7 +89,7 @@ type
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
   public
-    {Public declarations}
+    { Public declarations }
     iniFile: TIniFile;
   end;
 
@@ -98,7 +100,7 @@ implementation
 
 {%CLASSGROUP 'Vcl.Controls.TControl'}
 {$R *.dfm}
-{TDM}
+{ TDM }
 
 uses
   System.IOUtils,
@@ -269,8 +271,6 @@ var
   lDatabase: string;
 begin
   try
-    AddToLog('  Settings fetched');
-
     AddToLog('  Connecting to database');
 
     lServer := Copy(EasyPOS_Database, 1, POS(':', EasyPOS_Database) - 1);
@@ -323,7 +323,7 @@ end;
 
 Function TDM.FetchNextTransID(aTransactionIDUSedFor: String): Integer;
 begin
-  AddToLog(Format('  Fetching next transaction for %s.', [aTransactionIDUSedFor]));
+  AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
@@ -332,7 +332,7 @@ end;
 
 function TDM.FetchBCSettings: Boolean;
 begin
-  AddToLog('  Fetching Business Central settings');
+  AddToLog('  Fetching Business Central settings from INI file');
 
   LF_BC_BASEURL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_BASEURL', '');
   LF_BC_PORT := iniFile.ReadInteger('BUSINESS CENTRAL', 'BC_PORT', 0);
@@ -348,6 +348,8 @@ begin
     (LF_BC_PASSWORD = '') AND
     (LF_BC_ACTIVECOMPANYID = '') then
   begin
+    AddToLog('  Nothing set in INI file. Fetching from database');
+
     QFinansTemp.SQL.Clear;
     QFinansTemp.SQL.Add('Select ');
     QFinansTemp.SQL.Add('  UNDERAFDELING.BC_BASEURL, ');
@@ -446,6 +448,7 @@ var
   lText: string;
   lDaysToLookAfterRecords: Integer;
   BC_TransactionID: Integer;
+  lDateAndTimeOfLastRun: TDateTime;
 
   procedure CreateAndExportFinancialRecord;
   var
@@ -457,8 +460,9 @@ var
     Delimiter: string;
     lErrotString: string;
     lJSONStr: string;
+    DoContinue: Boolean;
 
-    {TSI:IGNORE ON}
+    { TSI:IGNORE ON }
 
     function GetButiksID(lAfdNr: String): String;
     begin
@@ -475,7 +479,7 @@ var
       try
         if (not(DirectoryExists(LogFileFolder + 'FinansEksport\'))) then
           CreateDir(LogFileFolder + 'FinansEksport\');
-        lFinansEKsportFileName := LogFileFolder + 'FinansEksport\' + 'EkspFinancialRecordsToBC' + FormatDateTime('yyyymmddhhmm', NOW) + '.Txt';
+        lFinansEKsportFileName := LogFileFolder + 'FinansEksport\' + 'EkspFinancialRecordsToBC' + FormatDateTime('yyyymmddhh', NOW) + '.Txt';
         AssignFile(lExportFile, lFinansEKsportFileName);
         Delimiter := ';';
 
@@ -543,6 +547,12 @@ var
             lkmCashstatement.type_ := '0';
             // Kontonummer eller debitornummer
             lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+            // Vil det være muligt at lave en ”fedtmule” løsning, hvor der under eksport af finansposter til BC kunne laves en konvertering fra F til K hvis
+            // kontonummeret er 86123444?
+            if (lkmCashstatement.id = '86123444') then
+            begin
+              lkmCashstatement.type_ := '2';
+            end;
           end;
         5: // Afr.
           begin
@@ -664,34 +674,33 @@ var
 
       INC(lExportCounter);
 
-{$IFDEF APPMODE}
-      AddToLog(Format('  Record: %d - ' + lJSONStr, [lExportCounter]));
-      WriteEksportedRecordToTextfile;
-{$ELSE}
-{$IFDEF DEBUG}
-      if TRUE then
-{$ENDIF}
-{$IFDEF RELEASE}
-        // POST (INsert den)
-        if (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse)) then
-{$ENDIF}
-        begin
-          AddToLog(Format('  Record: %d - ' + lJSONStr, [lExportCounter]));
-          WriteEksportedRecordToTextfile;
-        end
-        else
-        begin
-          lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
-            '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
-            '  Code: ' + 'Appmode' + #13#10 +
-            '  Message: ' + #13#10 + 'Appmode' + #13#10 +
-            '  JSON: ' + lJSONStr + #13#10;
-          AddToLog(lErrotString);
-          INC(lErrorCounter);
-          AddToErrorLog(lErrotString, lErrorFileName);
-        end;
+      // Add to log
+      AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
+      if OnlyTestRoutine then
+      begin
+        DoContinue := TRUE;
+      end
+      else
+      begin
+        DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE));
+      end;
+
+      if DoContinue then
+      begin
+        WriteEksportedRecordToTextfile;
+      end
+      else
+      begin
+        lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
+          '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
+          '  Code: ' + 'Appmode' + #13#10 +
+          '  Message: ' + #13#10 + 'Appmode' + #13#10 +
+          '  JSON: ' + lJSONStr + #13#10;
+        AddToLog(lErrotString);
+        INC(lErrorCounter);
+        AddToErrorLog(lErrotString, lErrorFileName);
+      end;
       FReeAndNil(lResponse);
-{$ENDIF}
     finally
       lkmCashstatement.Free;
     end;
@@ -722,7 +731,9 @@ begin
           tnMain.StartTransaction;
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
-        lFromDateAndTime := NOW - lDaysToLookAfterRecords;
+//        iniFile.WriteDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
+        lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
+        lFromDateAndTime := lDateAndTimeOfLastRun;
         lToDateAndTime := NOW;
 
         AddToLog(Format('  Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
@@ -749,11 +760,13 @@ begin
             QFetchFinancialRecords.Next;
           end;
           AddToLog('  Iteration done');
-{$IFNDEF APPMODE}
-          MarkRecordAsHandled;
-{$ENDIF}
+          if NOT (OnlyTestRoutine) then
+          begin
+            MarkRecordAsHandled;
+          end;
           AddToLog('  Routine done');
-          iniFile.WriteDateTime('FinancialRecords', 'Last time there was sync to BC', NOW)
+          iniFile.WriteDateTime('FinancialRecords', 'Last time sync to BC was tried', NOW);
+          iniFile.WriteDateTime('FinancialRecords', 'Last run', lToDateAndTime);
         end
         else
         begin
@@ -793,6 +806,8 @@ begin
 end;
 
 procedure TDM.DoSyncronizeItems;
+const
+  lErrorFileName: String = 'ItemsErrors.txt';
 var
   lBusinessCentralSetup: TBusinessCentralSetup;
   lBusinessCentral: TBusinessCentral;
@@ -803,29 +818,34 @@ var
   lExportCounterVariants: Integer;
   lErrorCounter: Integer;
   lText: string;
-  lErrorFileName: string;
   BC_ItemsTransactionID: Integer;
   BC_VariantsTransactionID: Integer;
   lCurrentHeadItem: String;
   lDepartment: string;
+  lDateAndTimeOfLastRun: TDateTime;
+  ContinueWithVariants: Boolean;
 
   procedure CreateAndExportItems;
   var
     lkmItem: TkmItem;
     lFloat: Double;
     lResponse: TBusinessCentral_Response;
-    ContinueWithVariants: Boolean;
     lErrorString: string;
     lkmVariantId: TkmVariantId;
     Afbrudt: Boolean;
     lJSONStr: string;
+    DoContinue: Boolean;
   begin
-    ContinueWithVariants := TRUE;
     if (lCurrentHeadItem <> QFetchItems.FieldByName('VareID').AsString) then
     begin
+      // Set current head item
+      lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
+      // Head item has changed. Do transfer
       AddToLog(Format('  Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
+      // Inc amount of transferred head items
       INC(lExportCounterHeadItems);
 
+      // Build head item
       lkmItem := TkmItem.Create;
       try
         lkmItem.transId := BC_ItemsTransactionID;
@@ -846,52 +866,67 @@ var
         else
           lkmItem.netWeight := 0;
 
+        // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
 
-{$IFDEF APPMODE}
-        AddToLog(Format('    Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
-
-{$ELSE}
-        if (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse)) then
+        // Add to log
+        AddToLog(Format('    Head item to transfer: %d - %s', [lExportCounterHeadItems, lJSONStr]));
+        if OnlyTestRoutine then
         begin
-          ContinueWithVariants := TRUE;
-          AddToLog(Format('    Head item: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+          DoContinue := TRUE;
         end
         else
         begin
+          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, TRUE));
+        end;
+
+        if DoContinue then
+        begin
+          // No error or test
+          ContinueWithVariants := TRUE;
+        end
+        else
+        begin
+          // ERROR - Do not continues with variants
+          ContinueWithVariants := FALSE;
+          // Insert error counter
           INC(lErrorCounter);
+          // Build error string
           lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
             '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
             '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
             '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
-          ContinueWithVariants := FALSE;
+          // Add to log file.
+          AddToErrorLog(lErrorString, lErrorFileName);
         end;
         FReeAndNil(lResponse);
-{$ENDIF}
       finally
         lkmItem.Free;
       end;
 
       if (ContinueWithVariants) then
       begin
-        lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
-
-        AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
-{$IFNDEF APPMODE}
-        QItemsTemp.SQL.Clear;
-        QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
-        QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
-        QItemsTemp.ExecSQL;
-{$ENDIF}
-        AddToLog(Format('    Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
+        // To this head item we can continue and mark head item as done
+        if NOT OnlyTestRoutine then
+        begin
+          AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
+          QItemsTemp.SQL.Clear;
+          QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
+          QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
+          QItemsTemp.ExecSQL;
+          AddToLog(Format('    Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
+        end;
       end;
     end;
 
     if (ContinueWithVariants) then
     begin
+      // To this head item we can continue with variants
       Afbrudt := FALSE;
 
+      // Increment exported variants
       INC(lExportCounterVariants);
+      // Create variant class
       lkmVariantId := TkmVariantId.Create;
       try
         lkmVariantId.transId := BC_VariantsTransactionID;
@@ -904,40 +939,53 @@ var
         lkmVariantId.transDato := FormatDateTime('dd-mm-yyyy', NOW);
         lkmVariantId.transTid := FormatDateTime('hh:mm:ss', NOW);
 
+        // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmVariantId);
 
-{$IFDEF APPMODE}
-        AddToLog(Format('      Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
-{$ELSE}
+        // Add to log
+        AddToLog(Format('      Variant to transfer: %d - %s', [lExportCounterVariants, lJSONStr]));
         // POST (INsert den)
-        if (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse)) then
+        if OnlyTestRoutine then
         begin
-          AddToLog(Format('      Variant: %d - ' + lJSONStr, [lExportCounterHeadItems]));
+          DoContinue := TRUE;
         end
         else
         begin
+          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, TRUE));
+        end;
+
+        if DoContinue then
+        begin
+          // No error
+        end
+        else
+        begin
+          // ERROR
           INC(lErrorCounter);
+          // Build errorstring
           lErrorString := 'Unexpected error while inserting variant in Business Central. ' + #13#10 +
+            '  Variant: ' + QFetchItems.FieldByName('VariantID').AsString + #13#10 +
             '  Code: ' + IntToStr((lResponse as TBusinessCentral_ErrorResponse).StatusCode) + #13#10 +
             '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
           Afbrudt := TRUE;
+          // Add to errorlog
+          AddToErrorLog(lErrorString, lErrorFileName);
         end;
         FReeAndNil(lResponse);
-{$ENDIF}
       finally
         FReeAndNil(lkmVariantId);
       end;
 
       if (NOT(Afbrudt)) then
       begin
-        AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
-
-{$IFNDEF APPMODE}
-        QItemsTemp.SQL.Clear;
-        QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
-        QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
-        QItemsTemp.ExecSQL;
-{$ENDIF}
+        if NOT OnlyTestRoutine then
+        begin
+          AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
+          QItemsTemp.SQL.Clear;
+          QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
+          QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
+          QItemsTemp.ExecSQL;
+        end;
       end;
     end;
   end;
@@ -957,9 +1005,12 @@ begin
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('Items', 'Days to look for records', 5);
         lDepartment := iniFile.ReadString('Items', 'Department', '');
-        lFromDateAndTime := NOW - lDaysToLookAfterRecords;
+//        iniFile.WriteDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
+        lDateAndTimeOfLastRun := iniFile.ReadDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
+        lFromDateAndTime := lDateAndTimeOfLastRun;
         lToDateAndTime := NOW;
 
+        AddToLog(Format('  Department: %s ', [lDepartment]));
         AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
         QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
@@ -975,6 +1026,7 @@ begin
         lExportCounterVariants := 0;
         lErrorCounter := 0;
         lCurrentHeadItem := '';
+        ContinueWithVariants := TRUE;
 
         if (NOT(QFetchItems.EOF)) then
         begin
@@ -990,7 +1042,8 @@ begin
           AddToLog('  Iteration done');
           AddToLog(Format('  Exported %d head items and %d variants', [lExportCounterHeadItems, lExportCounterVariants]));
           AddToLog('  Routine done');
-          iniFile.WriteDateTime('Items', 'Last time there was sync to BC', NOW)
+          iniFile.WriteDateTime('Items', 'Last time sync to BC was tried', NOW);
+          iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
         end
         else
         begin
@@ -1007,11 +1060,16 @@ begin
           // Some error occured. Send an mail to user
           // Send mail with file LogFolder + lErrorName
           // Rename file
-          lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
+          lText := 'Der skete en fejl ved synkronisering af varer til Business Central.' + #13#10 +
             'Vedhæftet er en fil med information' + #13#10;
-          SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
+          SendErrorMail(LogFileFolder + lErrorFileName, 'Varer', lText);
           // Rename error file
-          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
+          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
+        end
+        else
+        begin
+          // save last time items was checked
+          iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
         end;
       finally
         AddToLog('  TBusinessCentral - Free');
@@ -1031,21 +1089,23 @@ end;
 procedure TDM.DoSyncronizeSalesTransactions;
 begin
   AddToLog('DoSyncronizeSalesTransactions - BEGIN');
+  AddToLog('  Not implemented');
   AddToLog('DoSyncronizeSalesTransactions - END');
 end;
 
 procedure TDM.DoSyncronizeMovemmentsTransaction;
 begin
   AddToLog('DoSyncronizeMovemmentsTransaction - BEGIN');
+  AddToLog('  Not implemented');
   AddToLog('DoSyncronizeMovemmentsTransaction - END');
 end;
 
 procedure TDM.DoHandleEksportToBusinessCentral;
 var
   lSyncroniseFinancialRecords: Boolean;
-  lItems: Boolean;
-  lSalesTransactions: Boolean;
-  lMovementsTransactions: Boolean;
+  lSyncronizeItem: Boolean;
+  lSyncronizeSalesTransactions: Boolean;
+  lSyncronizeMovementsTransactions: Boolean;
 begin
   // This will check what to syncronize and do it.
   try
@@ -1053,19 +1113,20 @@ begin
     DoClearFolder(LogFileFolder, 'Log*.*');
     DoClearFolder(LogFileFolder, 'Error*.*');
     DoClearFolder(LogFileFolder + 'FinansEksport\', 'EkspFinancialRecordsToBC*.*');
+    DoClearFolder(LogFileFolder + 'BC_Log\', 'BusinessCentralCommunication*.*');
 
     lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
-    lItems := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
-    lSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
-    lMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
+    lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
+    lSyncronizeSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
+    lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
 
     AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
-    AddToLog(Format('Syncronize Items: %s', [lItems.ToString]));
-    AddToLog(Format('Syncronize Sales Transactions: %s', [lSalesTransactions.ToString]));
-    AddToLog(Format('Syncronize Movements Transaction: %s', [lMovementsTransactions.ToString]));
+    AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
+    AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
+    AddToLog(Format('Syncronize Movements Transaction: %s', [lSyncronizeMovementsTransactions.ToString]));
     AddToLog('  ');
 
-    if lItems then
+    if lSyncronizeItem then
     begin
       DoSyncronizeItems;
     end;
@@ -1075,12 +1136,12 @@ begin
       DoSyncronizeFinansCialRecords;
     end;
 
-    if lSalesTransactions then
+    if lSyncronizeSalesTransactions then
     begin
       DoSyncronizeSalesTransactions;
     end;
 
-    if lMovementsTransactions then
+    if lSyncronizeMovementsTransactions then
     begin
       DoSyncronizeMovemmentsTransaction;
     end;
@@ -1110,7 +1171,7 @@ var
     if VerInfoSize = 0 then
     begin
       Dummy := GetLastError;
-    end; {if}
+    end; { if }
     GetMem(JvVerInf, VerInfoSize);
     GetFileVersionInfo(PChar(ParamStr(0)), 0, VerInfoSize, JvVerInf);
     VerQueryValue(JvVerInf, '\', Pointer(VerValue), VerValueSize);
@@ -1149,11 +1210,13 @@ begin
   EasyPOS_Database_Password := iniFile.ReadString('PROGRAM', 'PASSWORD', '');
   EasyPOS_Department := iniFile.ReadString('PROGRAM', 'Department', '');
   EasyPOS_Machine := iniFile.ReadString('PROGRAM', 'Machine', '');
+  OnlyTestRoutine := iniFile.ReadBool('PROGRAM', 'TestRoutine', FALSE);
   AddToLog('Database: ' + EasyPOS_Database);
   AddToLog('User: xxx');
   AddToLog('Password: xxx');
   AddToLog('Department: ' + EasyPOS_Department);
   AddToLog('Machine: ' + EasyPOS_Machine);
+  AddToLog('Only test: ' + OnlyTestRoutine.ToString(TRUE));
 
   AddToLog(' ');
 
