@@ -56,7 +56,7 @@ begin
     Reg.RootKey := HKEY_LOCAL_MACHINE;
     if Reg.OpenKey('\SYSTEM\CurrentControlSet\Services\' + Name, false) then
     begin
-      Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to BUsiness Central.');
+      Reg.WriteString('Description', 'EasyPOS Service to synconize data from EasyPOS to Business Central.');
       Reg.CloseKey;
     end;
   finally

@@ -23,7 +23,7 @@ object DM: TDM
     Top = 184
   end
   object FDPhysFBDriverLink1: TFDPhysFBDriverLink
-    VendorLib = 'Z:\EasyPOS\Windows Service\EasyPOSToBusinessCentral\fbclient.dll'
+    VendorLib = '.\fbclient.dll'
     Left = 129
     Top = 102
   end

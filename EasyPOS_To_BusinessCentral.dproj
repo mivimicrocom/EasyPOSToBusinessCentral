@@ -5,7 +5,7 @@
         <FrameworkType>VCL</FrameworkType>
         <MainSource>EasyPOS_To_BusinessCentral.dpr</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>1</TargetedPlatforms>
         <AppType>Application</AppType>
@@ -91,8 +91,14 @@
         <DCC_DebugInformation>0</DCC_DebugInformation>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <AppEnableRuntimeThemes>true</AppEnableRuntimeThemes>
         <AppDPIAwarenessMode>PerMonitor</AppDPIAwarenessMode>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_MinorVer>2023</VerInfo_MinorVer>
+        <VerInfo_Release>1209</VerInfo_Release>
+        <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <VerInfo_Build>1</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=Microcom A/S;FileDescription=$(MSBuildProjectName);FileVersion=1.2023.1209.1;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
@@ -100,6 +106,7 @@
         </DelphiCompile>
         <DCCReference Include="uEasyPOSToBC.pas">
             <Form>EasyPOSToBusinessCentralService</Form>
+            <FormType>dfm</FormType>
             <DesignClass>TService</DesignClass>
         </DCCReference>
         <DCCReference Include="UDM.pas">
@@ -107,14 +114,13 @@
             <FormType>dfm</FormType>
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
-        <DCCReference Include="uMain.pas"/>
-        <DCCReference Include="uEasyPOSToBC.pas">
-            <Form>EasyPOSToBusinessCentralService</Form>
-            <FormType>dfm</FormType>
-            <DesignClass>TService</DesignClass>
-        </DCCReference>
         <DCCReference Include="uMain.pas">
             <Form>frmMain</Form>
+        </DCCReference>
+        <DCCReference Include="AfsendMail\uSendEMail.pas"/>
+        <DCCReference Include="BusinessCentral-Integration\uBusinessCentralIntegration.pas"/>
+        <DCCReference Include="BusinessCentral-Integration\USelectCompany.pas">
+            <Form>frmSelectCompany</Form>
         </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
