@@ -1043,7 +1043,11 @@ begin
           AddToLog(Format('  Exported %d head items and %d variants', [lExportCounterHeadItems, lExportCounterVariants]));
           AddToLog('  Routine done');
           iniFile.WriteDateTime('Items', 'Last time sync to BC was tried', NOW);
-          iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
+          if lErrorCounter=0 then
+          begin
+            //Only save time if there is no errors
+            iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
+          end;
         end
         else
         begin
@@ -1113,7 +1117,7 @@ begin
     DoClearFolder(LogFileFolder, 'Log*.*');
     DoClearFolder(LogFileFolder, 'Error*.*');
     DoClearFolder(LogFileFolder + 'FinansEksport\', 'EkspFinancialRecordsToBC*.*');
-    DoClearFolder(LogFileFolder + 'BC_Log\', 'BusinessCentralCommunication*.*');
+    DoClearFolder(LogFileFolder + 'BC_Log\', 'BusinessCentral*.*');
 
     lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
     lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);

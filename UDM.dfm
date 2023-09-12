@@ -18,7 +18,6 @@ object DM: TDM
       'Port=3070'
       'DriverID=FB')
     TxOptions.AutoStop = False
-    Connected = True
     Left = 88
     Top = 184
   end
