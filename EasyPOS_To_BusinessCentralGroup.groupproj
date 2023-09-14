@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{56B1567E-DB59-473B-B6CB-D1D87125CA43}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="EasyPOS_To_BusinessCentral.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="INIFileEditor\EP_To_BC_Editor.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="EasyPOS_To_BusinessCentral">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj"/>
+    </Target>
+    <Target Name="EasyPOS_To_BusinessCentral:Clean">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EasyPOS_To_BusinessCentral:Make">
+        <MSBuild Projects="EasyPOS_To_BusinessCentral.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="EP_To_BC_Editor">
+        <MSBuild Projects="INIFileEditor\EP_To_BC_Editor.dproj"/>
+    </Target>
+    <Target Name="EP_To_BC_Editor:Clean">
+        <MSBuild Projects="INIFileEditor\EP_To_BC_Editor.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EP_To_BC_Editor:Make">
+        <MSBuild Projects="INIFileEditor\EP_To_BC_Editor.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral;EP_To_BC_Editor"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral:Clean;EP_To_BC_Editor:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="EasyPOS_To_BusinessCentral:Make;EP_To_BC_Editor:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

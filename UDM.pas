@@ -75,7 +75,7 @@ type
     LF_BC_ACTIVECOMPANYID: String;
 
     procedure AddToLog(aStringToWriteToLogFile: String);
-    procedure InitialilzeProgram;
+    function InitialilzeProgram: Boolean;
     procedure DoHandleEksportToBusinessCentral;
     function ConnectToDB: Boolean;
     procedure DisconnectFromDB;
@@ -731,7 +731,7 @@ begin
           tnMain.StartTransaction;
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
-//        iniFile.WriteDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
+        // iniFile.WriteDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
         lFromDateAndTime := lDateAndTimeOfLastRun;
         lToDateAndTime := NOW;
@@ -760,7 +760,7 @@ begin
             QFetchFinancialRecords.Next;
           end;
           AddToLog('  Iteration done');
-          if NOT (OnlyTestRoutine) then
+          if NOT(OnlyTestRoutine) then
           begin
             MarkRecordAsHandled;
           end;
@@ -1005,7 +1005,7 @@ begin
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('Items', 'Days to look for records', 5);
         lDepartment := iniFile.ReadString('Items', 'Department', '');
-//        iniFile.WriteDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
+        // iniFile.WriteDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
         lFromDateAndTime := lDateAndTimeOfLastRun;
         lToDateAndTime := NOW;
@@ -1043,9 +1043,9 @@ begin
           AddToLog(Format('  Exported %d head items and %d variants', [lExportCounterHeadItems, lExportCounterVariants]));
           AddToLog('  Routine done');
           iniFile.WriteDateTime('Items', 'Last time sync to BC was tried', NOW);
-          if lErrorCounter=0 then
+          if lErrorCounter = 0 then
           begin
-            //Only save time if there is no errors
+            // Only save time if there is no errors
             iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
           end;
         end
@@ -1113,48 +1113,51 @@ var
 begin
   // This will check what to syncronize and do it.
   try
-    DM.InitialilzeProgram;
-    DoClearFolder(LogFileFolder, 'Log*.*');
-    DoClearFolder(LogFileFolder, 'Error*.*');
-    DoClearFolder(LogFileFolder + 'FinansEksport\', 'EkspFinancialRecordsToBC*.*');
-    DoClearFolder(LogFileFolder + 'BC_Log\', 'BusinessCentral*.*');
-
-    lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
-    lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
-    lSyncronizeSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
-    lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
-
-    AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
-    AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
-    AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
-    AddToLog(Format('Syncronize Movements Transaction: %s', [lSyncronizeMovementsTransactions.ToString]));
-    AddToLog('  ');
-
-    if lSyncronizeItem then
+    if DM.InitialilzeProgram then
     begin
-      DoSyncronizeItems;
-    end;
+      DoClearFolder(LogFileFolder, 'Log*.*');
+      DoClearFolder(LogFileFolder, 'Error*.*');
+      DoClearFolder(LogFileFolder + 'FinansEksport\', 'EkspFinancialRecordsToBC*.*');
+      DoClearFolder(LogFileFolder + 'BC_Log\', 'BusinessCentral*.*');
 
-    if lSyncroniseFinancialRecords then
-    begin
-      DoSyncronizeFinansCialRecords;
-    end;
+      lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
+      lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
+      lSyncronizeSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
+      lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
 
-    if lSyncronizeSalesTransactions then
-    begin
-      DoSyncronizeSalesTransactions;
-    end;
+      AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
+      AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
+      AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
+      AddToLog(Format('Syncronize Movements Transaction: %s', [lSyncronizeMovementsTransactions.ToString]));
+      AddToLog('  ');
 
-    if lSyncronizeMovementsTransactions then
-    begin
-      DoSyncronizeMovemmentsTransaction;
+      if lSyncronizeItem then
+      begin
+        DoSyncronizeItems;
+      end;
+
+      if lSyncroniseFinancialRecords then
+      begin
+        DoSyncronizeFinansCialRecords;
+      end;
+
+      if lSyncronizeSalesTransactions then
+      begin
+        DoSyncronizeSalesTransactions;
+      end;
+
+      if lSyncronizeMovementsTransactions then
+      begin
+        DoSyncronizeMovemmentsTransaction;
+      end;
+      iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
 
   except
   end;
 end;
 
-procedure TDM.InitialilzeProgram;
+function TDM.InitialilzeProgram: Boolean;
 (*
   This routine will read global settings from the INI file.
   It will read the programs version.,
@@ -1162,6 +1165,8 @@ procedure TDM.InitialilzeProgram;
 *)
 var
   PrgVers1, PrgVers2, PrgVers3, PrgVers4: Word;
+  glRunTime: string;
+  glLastRunTime: TDateTime;
 
   procedure GetBuildInfo(var V1, V2, V3, V4: Word);
   var
@@ -1189,52 +1194,106 @@ var
     FreeMem(JvVerInf, VerInfoSize);
   end;
 
+  function ItIsTimeToRun: Boolean;
+  var
+    lCurrentHour: string;
+  begin
+    if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
+    begin
+      // It is not today. Check time
+      lCurrentHour := FormatDateTime('hh', NOW);
+      if lCurrentHour = glRunTime then
+      begin
+        // It is time to run
+        Result := TRUE;
+      end
+      else
+      begin
+        // Not the right time to run
+        Result := FALSE;
+      end;
+    end
+    else
+    begin
+      // Last run was today. You cannot run more today
+      Result := FALSE;
+    end;
+  end;
+
 begin
   GetBuildInfo(PrgVers1, PrgVers2, PrgVers3, PrgVers4);
 
-  glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
+  // glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
+  glRunTime := iniFile.ReadString('PROGRAM', 'RUNTIME', '22');
+  glLastRunTime := iniFile.ReadDateTime('PROGRAM', 'LAST RUN', NOW - 365);
+{$IFDEF DEBUG}
+  glTimer := 2; // Check every 2 minutes
+{$ELSE}
+  glTimer := 15; // Check every 15 minutes
+{$ENDIF}
+
   LogFileFolder := iniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
-  SQLLogFileFolder := LogFileFolder + 'SQL\';
-
-  ForceDirectories(LogFileFolder);
-  ForceDirectories(SQLLogFileFolder);
-
   AddToLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' +
-    IntToStr(PrgVers1) + '.' + IntToStr(PrgVers2) + '.' + IntToStr(PrgVers3) + '.' + IntToStr(PrgVers4));
-  AddToLog(' ');
-  AddToLog('INI file: ' + iniFile.FileName);
-  AddToLog(' ');
-
-  AddToLog('Program timer (i sekunder): ' + IntToStr(glTimer));
-  AddToLog('LogFileFolder: ' + LogFileFolder);
-  AddToLog('INI File: ' + ExtractFilePath(ParamStr(0)) + 'Settings.INI');
-
-  EasyPOS_Database := iniFile.ReadString('PROGRAM', 'DATABASE', '');
-  EasyPOS_Database_User := iniFile.ReadString('PROGRAM', 'USER', '');
-  EasyPOS_Database_Password := iniFile.ReadString('PROGRAM', 'PASSWORD', '');
-  EasyPOS_Department := iniFile.ReadString('PROGRAM', 'Department', '');
-  EasyPOS_Machine := iniFile.ReadString('PROGRAM', 'Machine', '');
-  OnlyTestRoutine := iniFile.ReadBool('PROGRAM', 'TestRoutine', FALSE);
-  AddToLog('Database: ' + EasyPOS_Database);
-  AddToLog('User: xxx');
-  AddToLog('Password: xxx');
-  AddToLog('Department: ' + EasyPOS_Department);
-  AddToLog('Machine: ' + EasyPOS_Machine);
-  AddToLog('Only test: ' + OnlyTestRoutine.ToString(TRUE));
-
+    IntToStr(PrgVers1) + '.' +
+    IntToStr(PrgVers2) + '.' +
+    IntToStr(PrgVers3) + '.' +
+    IntToStr(PrgVers4));
   AddToLog(' ');
 
-  AddToLog('Initialize done  ');
-  AddToLog('  ');
+  if ItIsTimeToRun then
+  begin
+    Result := TRUE;
+    AddToLog('It is time to run.');
+    AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
+    AddToLog(Format('  Should run at %s', [glRunTime]));
+    AddToLog(' ');
 
-  tiTimer.Interval := glTimer * 1000;
+    SQLLogFileFolder := LogFileFolder + 'SQL\';
+
+    ForceDirectories(LogFileFolder);
+    ForceDirectories(SQLLogFileFolder);
+
+    AddToLog('INI file: ' + iniFile.FileName);
+    AddToLog(' ');
+
+    AddToLog('Program timer (i minutter): ' + IntToStr(glTimer));
+    AddToLog('LogFileFolder: ' + LogFileFolder);
+    AddToLog('INI File: ' + ExtractFilePath(ParamStr(0)) + 'Settings.INI');
+
+    EasyPOS_Database := iniFile.ReadString('PROGRAM', 'DATABASE', '');
+    EasyPOS_Database_User := iniFile.ReadString('PROGRAM', 'USER', '');
+    EasyPOS_Database_Password := iniFile.ReadString('PROGRAM', 'PASSWORD', '');
+    EasyPOS_Department := iniFile.ReadString('PROGRAM', 'Department', '');
+    EasyPOS_Machine := iniFile.ReadString('PROGRAM', 'Machine', '');
+    OnlyTestRoutine := iniFile.ReadBool('PROGRAM', 'TestRoutine', FALSE);
+    AddToLog('Database: ' + EasyPOS_Database);
+    AddToLog('User: xxx');
+    AddToLog('Password: xxx');
+    AddToLog('Department: ' + EasyPOS_Department);
+    AddToLog('Machine: ' + EasyPOS_Machine);
+    AddToLog('Only test: ' + OnlyTestRoutine.ToString(TRUE));
+
+    AddToLog(' ');
+
+    AddToLog('Initialize done  ');
+    AddToLog('  ');
+  end
+  else
+  begin
+    Result := FALSE;
+    AddToLog('It is not time to run.');
+    AddToLog(Format('  Last run was %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
+    AddToLog(Format('  Should run at %s', [glRunTime]));
+  end;
+
+  tiTimer.Interval := glTimer * 1000 * 60;
 end;
 
 procedure TDM.tiTimerTimer(Sender: TObject);
 begin
   tiTimer.Enabled := FALSE;
   DoHandleEksportToBusinessCentral;
-  tiTimer.Interval := glTimer * 1000;
+  tiTimer.Interval := glTimer * 1000 * 60;
   tiTimer.Enabled := TRUE;
 end;
 
