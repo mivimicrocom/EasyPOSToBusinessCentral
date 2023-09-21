@@ -66,18 +66,18 @@ end;
 
 procedure TEasyPOSToBusinessCentralService.ServiceStart(Sender: TService; var Started: Boolean);
 begin
-  DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
+//  DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
   DM.tiTimer.Interval := 2000;
   DM.tiTimer.Enabled := TRUE;
 end;
 
 procedure TEasyPOSToBusinessCentralService.ServiceStop(Sender: TService; var Stopped: Boolean);
 begin
-  try
-    DM.iniFile.Free;
-  except
-
-  end;
+//  try
+//    DM.iniFile.Free;
+//  except
+//
+//  end;
 end;
 
 end.

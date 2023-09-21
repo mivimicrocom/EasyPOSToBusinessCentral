@@ -46,12 +46,12 @@ end;
 
 procedure TfrmMain.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  DM.iniFile.Free;
+//  DM.iniFile.Free;
 end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
-  DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
+//  DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
 end;
 
 end.

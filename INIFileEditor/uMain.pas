@@ -307,7 +307,8 @@ begin
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_USERNAME', edBCUser.Text);
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_PASSWORD', edBCPassword.Text);
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', edBCActiveCompany.Text);
-  FiniFile.WriteString('BUSINESS CENTRAL', 'BC_PORT', edBCPOrt.Text);
+  FiniFile.WriteInteger('BUSINESS CENTRAL', 'BC_PORT', edBCPOrt.IntValue);
+
 
   FiniFile.WriteString('MAIL', 'From name', edMailSenderName.Text);
   FiniFile.WriteString('MAIL', 'From mail', edMailSenderMail.Text);
@@ -316,7 +317,7 @@ begin
   FiniFile.WriteString('MAIL', 'Recipient Mail', edMailReciever.Text);
   FiniFile.WriteString('MAIL', 'Subject', edMailSubject.Text);
   FiniFile.WriteString('MAIL', 'Host', edMailSMTPHost.Text);
-  FiniFile.WriteString('MAIL', 'Port', edMailSMTPPort.Text);
+  FiniFile.WriteInteger('MAIL', 'Port', edMailSMTPPort.IntValue);
   FiniFile.WriteString('MAIL', 'Username', edMailSMTPUSername.Text);
   FiniFile.WriteString('MAIL', 'password', edMailSMTPPassword.Text);
 
@@ -354,10 +355,13 @@ begin
 end;
 
 procedure TfrmMain.FormShow(Sender: TObject);
+var
+  lFileName: string;
 begin
-  if FileExists(ExtractFilePath(Application.ExeName) + '\' + FiniFileName) then
+  lFileName := ExtractFilePath(Application.ExeName) + '\' + FiniFileName;
+  if FileExists(lFileName) then
   begin
-    FiniFile := TINIFile.Create(ExtractFilePath(Application.ExeName) + '\' + FiniFileName);
+    FiniFile := TINIFile.Create(lFileName);
     ReadSettingsFromINIFile;
   end
   else

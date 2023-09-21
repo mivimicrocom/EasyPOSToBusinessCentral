@@ -1231,7 +1231,6 @@ begin
 {$ELSE}
   glTimer := 15; // Check every 15 minutes
 {$ENDIF}
-
   LogFileFolder := iniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
   AddToLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' +
     IntToStr(PrgVers1) + '.' +
@@ -1292,7 +1291,12 @@ end;
 procedure TDM.tiTimerTimer(Sender: TObject);
 begin
   tiTimer.Enabled := FALSE;
-  DoHandleEksportToBusinessCentral;
+  DM.iniFile := TIniFile.Create(ExtractFilePath(ParamStr(0)) + 'Settings.INI');
+  try
+    DoHandleEksportToBusinessCentral;
+  finally
+    DM.iniFile.Free;
+  end;
   tiTimer.Interval := glTimer * 1000 * 60;
   tiTimer.Enabled := TRUE;
 end;
