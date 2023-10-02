@@ -74,7 +74,6 @@ type
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
 
-    procedure AddToLog(aStringToWriteToLogFile: String);
     function InitialilzeProgram: Boolean;
     procedure DoHandleEksportToBusinessCentral;
     function ConnectToDB: Boolean;
@@ -91,6 +90,7 @@ type
   public
     { Public declarations }
     iniFile: TIniFile;
+    procedure AddToLog(aStringToWriteToLogFile: String);
   end;
 
 var
@@ -165,6 +165,8 @@ begin
   lPassword := iniFile.ReadString('MAIL', 'Password', '');
 
   AddToLog('    Filename: ' + aFileToAttach);
+  AddToLog('    Port: ' + lPort.ToString);
+  AddToLog('    Host: ' + lHost);
   AddToLog('    MailFromName: ' + lFromName);
   AddToLog('    MailFromMail: ' + lFromMail);
   AddToLog('    MailReplyToName: ' + lReplyName);
@@ -176,14 +178,18 @@ begin
   if (lRecipient <> '') AND (lHost <> '') then
   begin
     // CReate mail
+    AddToLog('    Create mailsetup');
     lSendEMailMailSetup := TSendEMailMailSetup.Create(nil);
     try
       // Create SMTP
+      AddToLog('    Create smtpsetup');
       lSendEMailSMTPSetup := TSendEMailSMTPSetup.Create(nil);
       try
         // Set values.
+        AddToLog('    SetupMailSettings');
         SetupMailSettings(lSendEMailSMTPSetup, lSendEMailMailSetup);
 
+        AddToLog('    Set reply to, receiver, subject and attachment');
         lSendEMailMailSetup.ReplyToEMail := lReplyMail;
         lSendEMailMailSetup.ReplyToName := lReplyName;
         lSendEMailMailSetup.ReceivingEMail := lRecipient;
@@ -191,15 +197,25 @@ begin
         lSendEMailMailSetup.Attachment := aFileToAttach;
         MailContent := TStringList.Create;
         try
+          AddToLog('    Set content of mail');
           MailContent.Add(aText);
           lSendEMailMailSetup.EmailContent := MailContent;
 
           // Create Send mail
+          AddToLog('    Create mail');
           lSendEMail := TSendEMail.Create(lSendEMailSMTPSetup);
           try
-
             try
+              AddToLog(Format('    Send mail to %s', [lRecipient]));
               Result := lSendEMail.SendEMail(lSendEMailMailSetup, aError);
+              if Result then
+              begin
+                AddToLog(Format('    Mail sendt', []));
+              end
+              else
+              begin
+                AddToLog(Format('    Error: %s', [aError]));
+              end;
             except
               On E: Exception do
               begin
@@ -842,8 +858,6 @@ var
       lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
       // Head item has changed. Do transfer
       AddToLog(Format('  Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
-      // Inc amount of transferred head items
-      INC(lExportCounterHeadItems);
 
       // Build head item
       lkmItem := TkmItem.Create;
@@ -882,11 +896,16 @@ var
 
         if DoContinue then
         begin
+          // Inc amount of transferred head items
+          INC(lExportCounterHeadItems);
           // No error or test
           ContinueWithVariants := TRUE;
         end
         else
         begin
+          AddToLog(Format('    ERROR (more in error file): %s - %s', [
+            (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
+            (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
           // ERROR - Do not continues with variants
           ContinueWithVariants := FALSE;
           // Insert error counter
@@ -895,7 +914,7 @@ var
           lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
             '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
             '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-            '  Message: ' + #13#10 + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
+            '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
           // Add to log file.
           AddToErrorLog(lErrorString, lErrorFileName);
         end;
@@ -924,8 +943,6 @@ var
       // To this head item we can continue with variants
       Afbrudt := FALSE;
 
-      // Increment exported variants
-      INC(lExportCounterVariants);
       // Create variant class
       lkmVariantId := TkmVariantId.Create;
       try
@@ -957,9 +974,14 @@ var
         if DoContinue then
         begin
           // No error
+          // Increment exported variants
+          INC(lExportCounterVariants);
         end
         else
         begin
+          AddToLog(Format('    ERROR (more in error file): %s - %s', [
+            (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
+            (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
           // ERROR
           INC(lErrorCounter);
           // Build errorstring
@@ -980,11 +1002,13 @@ var
       begin
         if NOT OnlyTestRoutine then
         begin
+{$IFNDEF DEBUG}
           AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
           QItemsTemp.SQL.Clear;
           QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
           QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
           QItemsTemp.ExecSQL;
+{$ENDIF}
         end;
       end;
     end;
@@ -1198,6 +1222,9 @@ var
   var
     lCurrentHour: string;
   begin
+{$IFDEF DEBUG}
+    Result := TRUE;
+{$ELSE}
     if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
     begin
       // It is not today. Check time
@@ -1218,6 +1245,7 @@ var
       // Last run was today. You cannot run more today
       Result := FALSE;
     end;
+{$ENDIF}
   end;
 
 begin

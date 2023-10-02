@@ -44,9 +44,9 @@ type
     FSMTPUsername: string;
     FSMTPPassword: string;
     FUseTLS: boolean;
-    {private declarations}
+    { private declarations }
   public
-    {public declarations}
+    { public declarations }
     property SMTPServer: string read FSMTPServer write FSMTPServer;
     property SMTPPort: integer read FSMTPPort write FSMTPPort;
     property SMTPUsername: string read FSMTPUsername write FSMTPUsername;
@@ -66,9 +66,9 @@ type
     FAttachment: string;
     FSendCopyToself: boolean;
     FUseMicrocomMailServer: boolean;
-    {private declarations}
+    { private declarations }
   public
-    {public declarations}
+    { public declarations }
     property ReceivingEMail: string read FReceivingEMail write FReceivingEMail;
     property ReplyToEMail: string read FReplyToEMail write FReplyToEMail;
     property ReplyToName: string read FReplyToName write FReplyToName;
@@ -88,11 +88,11 @@ type
     FUserPassProvider: TIdUserPassProvider;
     FSMTPSetup: TSendEMailSMTPSetup;
     FMailSetup: TSendEMailMailSetup;
-    {private declarations}
+    { private declarations }
     procedure AddSslHandler(var aSMTP: TIdSMTP; aSMTPSetup: TSendEMailSMTPSetup);
     procedure CreateMail(var aMSG: TIdMessage; aMailSetup: TSendEMailMailSetup);
   public
-    {public declarations}
+    { public declarations }
     constructor Create(aSMTPSetup: TSendEMailSMTPSetup);
     destructor Destroy; override;
     function SendEMail(aMail: TSendEMailMailSetup; var lErrorReturnString: String): boolean;
@@ -100,7 +100,10 @@ type
 
 implementation
 
-{TSendEMail}
+{ TSendEMail }
+
+uses
+  UDM;
 
 procedure TSendEMail.AddSslHandler(var aSMTP: TIdSMTP; aSMTPSetup: TSendEMailSMTPSetup);
 var
@@ -112,7 +115,7 @@ var
   SASLPlain: TIdSASLPlain;
   SASLSHA1: TIdSASLCRAMSHA1;
   SASLSkey: TIdSASLSKey;
-// UserPassProvider: TIdUserPassProvider;
+  // UserPassProvider: TIdUserPassProvider;
 begin
   aSMTP.IOHandler := TIdSSLIOHandlerSocketOpenSSL.Create(aSMTP);
   TIdSSLIOHandlerSocketOpenSSL(aSMTP.IOHandler).SSLOptions.Method := sslvTLSv1_2;
@@ -219,13 +222,19 @@ end;
 function TSendEMail.SendEMail(aMail: TSendEMailMailSetup; var lErrorReturnString: String): boolean;
 begin
   FMailSetup := aMail;
+  DM.AddToLog('      TIdSMTP.Create');
   FSMTP := TIdSMTP.Create(nil);
   try
+    DM.AddToLog('      TIdMessage.Create');
     FMSG := TIdMessage.Create(nil);
     try
+      DM.AddToLog('      CreateMail(FMSG, FMailSetup)');
       CreateMail(FMSG, FMailSetup);
       if FSMTPSetup.UseTLS then
+      begin
+        DM.AddToLog('      AddSslHandler(FSMTP, FSMTPSetup)');
         AddSslHandler(FSMTP, FSMTPSetup);
+      end;
       try
 
         FSMTP.Host := FSMTPSetup.FSMTPServer;
@@ -235,24 +244,16 @@ begin
         if FSMTPSetup.UseTLS then
           FSMTP.UseTLS := utUseExplicitTLS;
 
+        DM.AddToLog('      FSMTP.Connect');
         FSMTP.Connect;
         If (FSMTP.Connected) Then
         Begin
+          DM.AddToLog('      FSMTP.Authenticate');
           FSMTP.Authenticate;
 
+          DM.AddToLog('      FSMTP.Send(FMSG)');
           FSMTP.Send(FMSG);
 
-          If (FSMTP.Connected) Then
-          Begin
-            FSMTP.Disconnect;
-          End
-          Else
-          Begin
-            FSMTP.Disconnect;
-          End;
-        End
-        Else
-        Begin
           FSMTP.Disconnect;
         End;
         lErrorReturnString := '';
@@ -260,10 +261,10 @@ begin
       except
         on E: Exception do
         begin
-          FSMTP.Disconnect;
+          DM.AddToLog(Format('      Error: %s',[E.Message]));
           Result := False;
           lErrorReturnString := E.Message;
-          ShowMessage('Error: ' + #13#10 + E.Message);
+          FSMTP.Disconnect;
         end;
       end;
     finally
