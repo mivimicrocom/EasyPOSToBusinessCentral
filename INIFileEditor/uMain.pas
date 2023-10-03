@@ -111,6 +111,7 @@ type
     lbFinansLogFiles: TRzListBox;
     mmoFinansLog: TRzMemo;
     lblLastruntime: TLabel;
+    cbUseTLS: TRzCheckBox;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -177,6 +178,7 @@ begin
   edMailSubject.Text := FiniFile.ReadString('MAIL', 'Subject', '');
   edMailSMTPHost.Text := FiniFile.ReadString('MAIL', 'Host', '');
   edMailSMTPPort.Text := FiniFile.ReadString('MAIL', 'Port', '');
+  cbUseTLS.Checked := FiniFile.ReadBool('MAIL', 'UseTSL', FALSE);
   edMailSMTPUSername.Text := FiniFile.ReadString('MAIL', 'Username', '');
   edMailSMTPPassword.Text := FiniFile.ReadString('MAIL', 'password', '');
 
@@ -318,6 +320,8 @@ begin
   FiniFile.WriteString('MAIL', 'Subject', edMailSubject.Text);
   FiniFile.WriteString('MAIL', 'Host', edMailSMTPHost.Text);
   FiniFile.WriteInteger('MAIL', 'Port', edMailSMTPPort.IntValue);
+  FiniFile.WriteBool('MAIL', 'UseTSL', cbUseTLS.Checked);
+
   FiniFile.WriteString('MAIL', 'Username', edMailSMTPUSername.Text);
   FiniFile.WriteString('MAIL', 'password', edMailSMTPPassword.Text);
 

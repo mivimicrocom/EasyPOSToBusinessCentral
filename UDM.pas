@@ -131,6 +131,7 @@ var
   lPassword: string;
   MailContent: TStringList;
   aError: string;
+  lUseTSL: Boolean;
 
   procedure SetupMailSettings(var aSMTPSetup: TSendEMailSMTPSetup; var aMailSetup: TSendEMailMailSetup);
   begin
@@ -147,7 +148,7 @@ var
     aSMTPSetup.SMTPPort := lPort;
     aSMTPSetup.SMTPUsername := lUsername;
     aSMTPSetup.SMTPPassword := lPassword;
-    aSMTPSetup.UseTLS := TRUE;
+    aSMTPSetup.UseTLS := lUseTSL;
   end;
 
 begin
@@ -163,6 +164,7 @@ begin
   lPort := iniFile.ReadInteger('MAIL', 'Port', 587);
   lUsername := iniFile.ReadString('MAIL', 'Username', '');
   lPassword := iniFile.ReadString('MAIL', 'Password', '');
+  lUseTSL := iniFile.ReadBool('MAIL', 'UseTSL', FALSE);
 
   AddToLog('    Filename: ' + aFileToAttach);
   AddToLog('    Port: ' + lPort.ToString);
