@@ -51,6 +51,9 @@ type
     GetNextTransactionIDToBCTRANSID: TIntegerField;
     QFetchItems: TFDQuery;
     QItemsTemp: TFDQuery;
+    QFetchSalesTransactions: TFDQuery;
+    QSalesTransactionsTemp: TFDQuery;
+    INS_Sladre: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -87,6 +90,7 @@ type
     Function FetchNextTransID(aTransactionIDUSedFor: String): Integer;
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
+    procedure InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDateTime; aTransID: Integer);
   public
     { Public declarations }
     iniFile: TIniFile;
@@ -335,6 +339,118 @@ begin
     begin
       AddToLog('  ERROR (Disconnect DB)!');
       AddToLog(E.Message);
+    end;
+  end;
+end;
+
+procedure TDM.InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDateTime; aTransID: Integer);
+Const
+  TillagArt: Integer = 3000;
+begin
+  AddToLog(Format('Insert tracing log in DB. ART:%s,  Transaction ID: %s', [IntToStr(TillagArt +  + aArt), aTransID.ToString]));
+  try
+    if (NOT(tnMain.Active)) then
+      tnMain.StartTransaction;
+
+    INS_Sladre.ParamByName('PDato').AsDateTime := NOW;
+    INS_Sladre.ParamByName('PArt').AsInteger := TillagArt + aArt;
+    INS_Sladre.ParamByName('PEkspedient').AsString := '99999';
+    INS_Sladre.ParamByName('PVareFrvStrNr').AsString := '';
+    Case aArt of
+      1:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af vare til Business Central OK (Service). ';
+        end;
+      2:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af vare til Business Central IKKE OK (Service). ';
+        end;
+      3:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandør faktura til Business Central OK (Service)';
+        end;
+      4:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandør faktura IKKE OK';
+        end;
+      5:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Salg synk. med Business Central OK (Service) (' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
+        end;
+      6:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Salgstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+        end;
+      7:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Tilg synk. med til Business Central OK (Service) ' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
+        end;
+      8:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Tilgangstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+        end;
+      9:
+        begin
+          // if (KaldtFra = 3) then
+          // Ins_Sladre.ParamByName('PBonText').AsString := 'Stat synk. med Nav. (' + FormatDateTime('ddmmyy hhmm', NOW) + ' for afdeling: ' + GemtAfdNr + ')'
+          // else
+          INS_Sladre.ParamByName('PBonText').AsString := 'Stat synk. til Business Central OK (Service) ' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
+        end;
+      10:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Statustransaktioner IKKE sykroniseret med Business Central (Servive) ';
+        end;
+      11:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Flyt synk. til Business Central OK (Service) ' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
+            FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
+        end;
+      12:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Flytningstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+        end;
+      13:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Lagerbeholdning synkroniseret til Business Central OK (Service) ';
+        end;
+      14:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Lagerbeholdning IKKE synkroniseret med Business Central (Servive) ';
+        end;
+      15:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Finansposter synkroniseret til Business Central OK (Service) ';
+        end;
+      16:
+        begin
+          INS_Sladre.ParamByName('PBonText').AsString := 'Finansposter IKKE synkroniseret med Business Central (Servive) ';
+        end;
+    end;
+    AddToLog('  '+INS_Sladre.ParamByName('PBonText').AsString);
+
+    INS_Sladre.ParamByName('PLevNavn').AsString := 'TransID: Vare: ' + IntToStr(aTransID);
+    INS_Sladre.ParamByName('PVareGrpId').AsString := '';
+
+    INS_Sladre.ParamByName('PAfdeling_ID').AsString := '001';
+    INS_Sladre.ParamByName('PUAfd_Navn').AsString := '';
+    INS_Sladre.ParamByName('PUAfd_Grp_Navn').AsString := '';
+    INS_Sladre.ExecSQL;
+
+    if (tnMain.Active) then
+      tnMain.Commit;
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('ERROR. %s', [E.Message]));
+      if (tnMain.Active) then
+        tnMain.Rollback;
     end;
   end;
 end;
@@ -711,8 +827,8 @@ var
       begin
         lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
           '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
-          '  Code: ' + 'Appmode' + #13#10 +
-          '  Message: ' + #13#10 + 'Appmode' + #13#10 +
+          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
           '  JSON: ' + lJSONStr + #13#10;
         AddToLog(lErrotString);
         INC(lErrorCounter);
@@ -805,7 +921,12 @@ begin
             'Vedhæftet er en fil med information' + #13#10;
           SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
           // Rename error file
-          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
+          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+          InsertTracingLog(16, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+        end
+        else
+        begin
+          InsertTracingLog(15, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
         end;
       finally
         AddToLog('  TBusinessCentral - Free');
@@ -1094,12 +1215,14 @@ begin
             'Vedhæftet er en fil med information' + #13#10;
           SendErrorMail(LogFileFolder + lErrorFileName, 'Varer', lText);
           // Rename error file
-          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]))
+          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+          InsertTracingLog(2, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
         end
         else
         begin
           // save last time items was checked
           iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
+          InsertTracingLog(1, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
         end;
       finally
         AddToLog('  TBusinessCentral - Free');
@@ -1117,9 +1240,221 @@ begin
 end;
 
 procedure TDM.DoSyncronizeSalesTransactions;
+const
+  lSalesTransactionErrorFileName: String = 'SalestransactionErrors.txt';
+var
+  lBusinessCentralSetup: TBusinessCentralSetup;
+  lBusinessCentral: TBusinessCentral;
+  lDaysToLookAfterRecords: Integer;
+  lDateAndTimeOfLastRun: TDateTime;
+  lFromDateAndTime: TDateTime;
+  lToDateAndTime: TDateTime;
+  HighestTrtansID: Integer;
+  lNumberOfExportedSalesTransactions: Integer;
+  BC_TransactionID: Integer;
+  lErrorCounter: Integer;
+  RoutineCanceled: Boolean;
+  lText: string;
+
+  Function CreateAndExportSalesTransaction: Boolean;
+  var
+    lkmItemSale: TkmItemSale;
+    lResponse: TBusinessCentral_Response;
+    lJSONStr: string;
+    DoContinue: Boolean;
+    lErrotString: string;
+  begin
+    lkmItemSale := TkmItemSale.Create;
+    try
+      lkmItemSale.transId := BC_TransactionID;
+      lkmItemSale.epId := QFetchSalesTransactions.FieldByName('EpID').AsInteger;
+      lkmItemSale.bonNummer := QFetchSalesTransactions.FieldByName('Bonnummer').AsInteger;
+      lkmItemSale.vareId := QFetchSalesTransactions.FieldByName('VareID').AsString;
+      lkmItemSale.variantId := QFetchSalesTransactions.FieldByName('VariantID').AsString;
+      lkmItemSale.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+      lkmItemSale.salgstidspunkt := FormatDateTime('hh:mm:ss', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+      lkmItemSale.antal := QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+      if (QFetchSalesTransactions.FieldByName('Antal').AsFloat <> 0) then
+      begin
+        lkmItemSale.momsbelB := QFetchSalesTransactions.FieldByName('MomsBelob').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+        lkmItemSale.salgspris := QFetchSalesTransactions.FieldByName('Salgspris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+        lkmItemSale.kostPris := QFetchSalesTransactions.FieldByName('KostPris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+      end
+      else
+      begin
+        lkmItemSale.momsbelB := 0;
+        lkmItemSale.salgspris := 0;
+        lkmItemSale.kostPris := 0;
+      end;
+      lkmItemSale.gaveKortId := '0';
+      lkmItemSale.kasse := QFetchSalesTransactions.FieldByName('Kasse').AsString;
+      lkmItemSale.butikId := QFetchSalesTransactions.FieldByName('ButikID').AsString;
+      lkmItemSale.lagerStatus := 'Ubehandlet';
+      lkmItemSale.finansStatus := 'Ubehandlet';
+      lkmItemSale.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+      lkmItemSale.transTid := FormatDateTime('hh:mm:ss', NOW);
+
+      lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemSale);
+
+      INC(lNumberOfExportedSalesTransactions);
+
+      // Add to log
+      AddToLog(Format('  Sale transaction record to transfer: %d - %s', [lNumberOfExportedSalesTransactions, lJSONStr]));
+      if OnlyTestRoutine then
+      begin
+        DoContinue := TRUE;
+      end
+      else
+      begin
+        DoContinue := (lBusinessCentral.PostkmItemSale(lBusinessCentralSetup, lkmItemSale, lResponse, TRUE));
+      end;
+
+      if DoContinue then
+      begin
+        Result := TRUE;
+      end
+      else
+      begin
+        Result := FALSE;
+
+        lErrotString := 'Unexpected error when inserting sale transaction in BC ' + #13#10 +
+          '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+          '  JSON: ' + lJSONStr + #13#10;
+        AddToLog(lErrotString);
+        INC(lErrorCounter);
+        AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+      end;
+
+      FReeAndNil(lResponse);
+    finally
+      FReeAndNil(lkmItemSale);
+    end;
+  end;
+
 begin
   AddToLog('DoSyncronizeSalesTransactions - BEGIN');
-  AddToLog('  Not implemented');
+  if (ConnectToDB) then
+  begin
+    AddToLog('  TBusinessCentralSetup.Create');
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    try
+      AddToLog('  TBusinessCentral.Create');
+      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+      try
+        if (NOT(tnMain.Active)) then
+          tnMain.StartTransaction;
+
+        // Date of last run
+        lDaysToLookAfterRecords := iniFile.ReadInteger('SalesTransaction', 'Days to look for records', 5);
+        lDateAndTimeOfLastRun := iniFile.ReadDateTime('SalesTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
+        lFromDateAndTime := lDateAndTimeOfLastRun;
+        // Date until now
+        lToDateAndTime := NOW;
+
+        // Log
+        AddToLog(Format('  Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+
+        // Fetch sales transactions.
+        // All in the given period will be fetched.
+        // We do not care if they have been exported before.
+        // According to this comment in EPK
+        //
+        // Denne udlades, at de selv vil styre det i Navision
+        // DMNavision.QSynkronTransSalg.SQL.Add('  tr.Dagsafsluttet<>0 and ');
+        //
+        // They do the control in BC themselfes
+        QFetchSalesTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+        QFetchSalesTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+        QFetchSalesTransactions.SQL.SaveToFile(SQLLogFileFolder + 'SalesTransactions.SQL');
+        QFetchSalesTransactions.Open;
+
+        // Log
+        AddToLog(Format('  Query opened', []));
+
+        QFetchSalesTransactions.First;
+        // save highest TransID of record
+        HighestTrtansID := QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger;
+        If (Not(QFetchSalesTransactions.EOF)) then
+        begin
+          // At least 1 record is there - fetch next transactions UD
+          BC_TransactionID := FetchNextTransID('sales transations');
+          lNumberOfExportedSalesTransactions := 0;
+          RoutineCanceled := FALSE;
+          While (Not(QFetchSalesTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+          begin
+            RoutineCanceled := NOT CreateAndExportSalesTransaction;
+            if NOT RoutineCanceled then
+            begin
+              // save highest TransID of record
+              if (HighestTrtansID < QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger) then
+                HighestTrtansID := QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger;
+              QFetchSalesTransactions.Next;
+            end;
+          end;
+          AddToLog('  Iteration done');
+
+          if (NOT(RoutineCanceled)) then
+          begin
+            if NOT OnlyTestRoutine then
+            begin
+              AddToLog('  Marking records as exported');
+              AddToLog(Format('  Will set EKSPORTERET to %s. ', [HighestTrtansID.ToString]));
+
+              QSalesTransactionsTemp.SQL.Clear;
+              QSalesTransactionsTemp.SQL.Add('Update Transaktioner set ');
+              QSalesTransactionsTemp.SQL.Add('  Eksporteret = :P1 ');
+              QSalesTransactionsTemp.SQL.Add('where ');
+              QSalesTransactionsTemp.SQL.Add('  dato>=:PDato and ');
+              QSalesTransactionsTemp.SQL.Add('  dato<=:PDato2 and ');
+              QSalesTransactionsTemp.SQL.Add('  art IN (0,1) and ');
+              QSalesTransactionsTemp.SQL.Add('  (EKSPORTERET>=0 or EKSPORTERET IS null) ');
+              QSalesTransactionsTemp.ParamByName('P1').AsInteger := HighestTrtansID;
+              QSalesTransactionsTemp.ParamByName('PDato').AsDateTime := lFromDateAndTime;
+              QSalesTransactionsTemp.ParamByName('PDato2').AsDateTime := lToDateAndTime;
+              QSalesTransactionsTemp.ExecSQL;
+            end;
+
+            if (tnMain.Active) then
+              tnMain.Commit;
+
+            iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
+            InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end
+          else
+          begin
+            lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
+              'Vedhæftet er en fil med information' + #13#10;
+            SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
+            // Rename error file
+            TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_Salgstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+            if (tnMain.Active) then
+              tnMain.Rollback;
+            AddToLog('  Export of sales transaction ended with errors.');
+            InsertTracingLog(6, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end;
+          iniFile.WriteDateTime('SalesTransaction', 'Last time sync to BC was tried', NOW);
+          AddToLog('  Routine done');
+        end
+        else
+        begin
+          if (tnMain.Active) then
+            tnMain.Commit;
+          AddToLog(Format('  No sales transactions to export', []));
+        end;
+      finally
+        AddToLog('  TBusinessCentral - Free');
+        FReeAndNil(lBusinessCentral);
+      end;
+    finally
+      AddToLog('  TBusinessCentralSetup - Free');
+      FReeAndNil(lBusinessCentralSetup);
+    end;
+
+    DisconnectFromDB;
+  end;
   AddToLog('DoSyncronizeSalesTransactions - END');
 end;
 

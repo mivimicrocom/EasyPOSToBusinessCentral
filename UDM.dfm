@@ -586,4 +586,135 @@ object DM: TDM
     Left = 552
     Top = 471
   end
+  object QFetchSalesTransactions: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'select '
+      '  tr.TRANSID as EpID, '
+      '  tr.UAFD_NAVN as Kasse, '
+      '  tr.KOSTPR as KostPris, '
+      '  tr.Eksporteret, '
+      '  tr.AFDELING_ID, '
+      '  af.NAVISION_IDX as ButikID, '
+      '  tr.SALGSTK as Antal, '
+      '  vfs.V509INDEX as VariantID, '
+      '  tr.BONNR as Bonnummer, '
+      '  tr.VAREFRVSTRNR as VareID, '
+      '  tr.SALGKR as Salgspris, '
+      '  tr.MomsKr as MomsBelob, '
+      '  tr.DATO as BogforingsDato '
+      'from transaktioner tr '
+      '  inner join afdeling af on (af.AFDELINGSNUMMER=tr.AFDELING_ID) '
+      '  Inner join varefrvstr vfs on ( '
+      
+        '                                 vfs.VAREPLU_ID=tr.VAREFRVSTRNR ' +
+        'and '
+      
+        '                                 vfs.FARVE_NAVN=tr.FARVE_NAVN an' +
+        'd '
+      
+        '                                 vfs.STOERRELSE_NAVN=tr.STOERREL' +
+        'SE_NAVN and '
+      
+        '                                 vfs.LAENGDE_NAVN=tr.LAENGDE_NAV' +
+        'N '
+      '                                ) '
+      'where '
+      '  tr.dato>=:PFromDate and '
+      '  tr.dato<=:PToDate and '
+      '  tr.art IN (0,1) '
+      'Order by 1')
+    Left = 304
+    Top = 424
+    ParamData = <
+      item
+        Name = 'PFROMDATE'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PTODATE'
+        ParamType = ptInput
+      end>
+  end
+  object QSalesTransactionsTemp: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 296
+    Top = 487
+  end
+  object INS_Sladre: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'Insert Into SladreHank ('
+      '  Dato,'
+      '  Art,'
+      '  LevNavn,'
+      '  Ekspedient,'
+      '  VareFrvStrNr,'
+      '  VareGrpId,'
+      '  BonText,'
+      '  Afdeling_ID,'
+      '  UAfd_Navn,'
+      '  UAfd_Grp_Navn'
+      ')'
+      'Values ('
+      '  :PDato,'
+      '  :PArt,'
+      '  :PLevNavn,'
+      '  :PEkspedient,'
+      '  :PVareFrvStrNr,'
+      '  :PVareGrpId,'
+      '  :PBonText,'
+      '  :PAfdeling_ID,'
+      '  :PUAfd_Navn,'
+      '  :PUAfd_Grp_Navn'
+      ');')
+    Left = 336
+    Top = 88
+    ParamData = <
+      item
+        Name = 'PDATO'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PART'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PLEVNAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PEKSPEDIENT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREFRVSTRNR'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREGRPID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PBONTEXT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_NAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_GRP_NAVN'
+        ParamType = ptInput
+      end>
+  end
 end
