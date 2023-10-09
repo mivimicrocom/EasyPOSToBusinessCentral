@@ -54,6 +54,10 @@ type
     QFetchSalesTransactions: TFDQuery;
     QSalesTransactionsTemp: TFDQuery;
     INS_Sladre: TFDQuery;
+    QFetchMovementsTransactions: TFDQuery;
+    QMovementsTransactionsTemp: TFDQuery;
+    QFetchStockRegulationsTransactions: TFDQuery;
+    QStockRegulationsTransationsTemp: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -91,6 +95,7 @@ type
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
     procedure InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDateTime; aTransID: Integer);
+    procedure DoSyncronizeStockRegulationTransaction;
   public
     { Public declarations }
     iniFile: TIniFile;
@@ -347,7 +352,7 @@ procedure TDM.InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDa
 Const
   TillagArt: Integer = 3000;
 begin
-  AddToLog(Format('Insert tracing log in DB. ART:%s,  Transaction ID: %s', [IntToStr(TillagArt +  + aArt), aTransID.ToString]));
+  AddToLog(Format('Insert tracing log in DB. ART:%s,  Transaction ID: %s', [IntToStr(TillagArt + +aArt), aTransID.ToString]));
   try
     if (NOT(tnMain.Active)) then
       tnMain.StartTransaction;
@@ -433,7 +438,7 @@ begin
           INS_Sladre.ParamByName('PBonText').AsString := 'Finansposter IKKE synkroniseret med Business Central (Servive) ';
         end;
     end;
-    AddToLog('  '+INS_Sladre.ParamByName('PBonText').AsString);
+    AddToLog('  ' + INS_Sladre.ParamByName('PBonText').AsString);
 
     INS_Sladre.ParamByName('PLevNavn').AsString := 'TransID: Vare: ' + IntToStr(aTransID);
     INS_Sladre.ParamByName('PVareGrpId').AsString := '';
@@ -1252,7 +1257,6 @@ var
   HighestTrtansID: Integer;
   lNumberOfExportedSalesTransactions: Integer;
   BC_TransactionID: Integer;
-  lErrorCounter: Integer;
   RoutineCanceled: Boolean;
   lText: string;
 
@@ -1323,7 +1327,6 @@ var
           '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
           '  JSON: ' + lJSONStr + #13#10;
         AddToLog(lErrotString);
-        INC(lErrorCounter);
         AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
       end;
 
@@ -1354,18 +1357,10 @@ begin
         lToDateAndTime := NOW;
 
         // Log
-        AddToLog(Format('  Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+        AddToLog(Format('  Fetching sales transactions. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
           FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
         // Fetch sales transactions.
-        // All in the given period will be fetched.
-        // We do not care if they have been exported before.
-        // According to this comment in EPK
-        //
-        // Denne udlades, at de selv vil styre det i Navision
-        // DMNavision.QSynkronTransSalg.SQL.Add('  tr.Dagsafsluttet<>0 and ');
-        //
-        // They do the control in BC themselfes
         QFetchSalesTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
         QFetchSalesTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
         QFetchSalesTransactions.SQL.SaveToFile(SQLLogFileFolder + 'SalesTransactions.SQL');
@@ -1459,10 +1454,397 @@ begin
 end;
 
 procedure TDM.DoSyncronizeMovemmentsTransaction;
+const
+  lMovementsTransactionErrorFileName: String = 'MovementstransactionErrors.txt';
+var
+  lBusinessCentralSetup: TBusinessCentralSetup;
+  lBusinessCentral: TBusinessCentral;
+  lDaysToLookAfterRecords: Integer;
+  lDateAndTimeOfLastRun: Extended;
+  lFromDateAndTime: Extended;
+  lToDateAndTime: Extended;
+  HighestTrtansID: Integer;
+  BC_TransactionID: Integer;
+  lNumberOfExportedMovementsTransactions: Integer;
+  RoutineCanceled: Boolean;
+  lResponse: TBusinessCentral_Response;
+  lText: string;
+
+  Function CreateAndExportMovementsTransaction: Boolean;
+  var
+    lkmItemMove: TkmItemMove;
+    lJSONStr: string;
+    DoContinue: Boolean;
+    lErrotString: string;
+  begin
+    lkmItemMove := TkmItemMove.Create;
+    try
+      lkmItemMove.transId := BC_TransactionID;
+      lkmItemMove.flytningsId := QFetchMovementsTransactions.FieldByName('FlytningsID').AsString;
+      lkmItemMove.vareId := QFetchMovementsTransactions.FieldByName('VareID').AsString;
+      lkmItemMove.variantId := QFetchMovementsTransactions.FieldByName('VariantID').AsString;
+      lkmItemMove.epId := QFetchMovementsTransactions.FieldByName('EPID').AsInteger;
+      lkmItemMove.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchMovementsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+      lkmItemMove.fraButik := QFetchMovementsTransactions.FieldByName('FraButik').AsString;
+      lkmItemMove.tilButik := QFetchMovementsTransactions.FieldByName('TilButik').AsString;
+      lkmItemMove.antal := QFetchMovementsTransactions.FieldByName('Antal').AsFloat;
+      if (QFetchMovementsTransactions.FieldByName('Antal').AsFloat <> 0) then
+      begin
+        lkmItemMove.kostPris := QFetchMovementsTransactions.FieldByName('KostPris').AsFloat / QFetchMovementsTransactions.FieldByName('Antal').AsFloat;
+      end
+      else
+      begin
+        lkmItemMove.kostPris := 0;
+      end;
+      lkmItemMove.status := '0';
+      lkmItemMove.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+      lkmItemMove.transTid := FormatDateTime('hh:mm:ss', NOW);
+
+      lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemMove);
+
+      INC(lNumberOfExportedMovementsTransactions);
+      // Add to log
+      AddToLog(Format('  Movement transaction record to transfer: %d - %s', [lNumberOfExportedMovementsTransactions, lJSONStr]));
+      if OnlyTestRoutine then
+      begin
+        DoContinue := TRUE;
+      end
+      else
+      begin
+        DoContinue := (lBusinessCentral.PostkmItemMove(lBusinessCentralSetup, lkmItemMove, lResponse, TRUE));
+      end;
+
+      if DoContinue then
+      begin
+        Result := TRUE;
+      end
+      else
+      begin
+        Result := FALSE;
+
+        lErrotString := 'Unexpected error when inserting movement transaction in BC ' + #13#10 +
+          '  EP Bonnr: ' + QFetchMovementsTransactions.FieldByName('FlytningsID').AsString + #13#10 +
+          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+          '  JSON: ' + lJSONStr + #13#10;
+        AddToLog(lErrotString);
+        AddToErrorLog(lErrotString, lMovementsTransactionErrorFileName);
+      end;
+      FReeAndNil(lResponse);
+    finally
+      lkmItemMove.Free;
+    end;
+  end;
+
 begin
   AddToLog('DoSyncronizeMovemmentsTransaction - BEGIN');
-  AddToLog('  Not implemented');
+  if (ConnectToDB) then
+  begin
+    AddToLog('  TBusinessCentralSetup.Create');
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    try
+      AddToLog('  TBusinessCentral.Create');
+      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+      try
+        if (NOT(tnMain.Active)) then
+          tnMain.StartTransaction;
+
+        // Date of last run
+        lDaysToLookAfterRecords := iniFile.ReadInteger('MovementsTransaction', 'Days to look for records', 5);
+        lDateAndTimeOfLastRun := iniFile.ReadDateTime('MovementsTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
+        lFromDateAndTime := lDateAndTimeOfLastRun;
+        // Date until now
+        lToDateAndTime := NOW;
+
+        // Log
+        AddToLog(Format('  Fetching records. movements transactons. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+
+        // Fetch movements transactions.
+
+        // AND  (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)
+
+        QFetchMovementsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+        QFetchMovementsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+        QFetchMovementsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'MovementsTransactions.SQL');
+        QFetchMovementsTransactions.Open;
+
+        // Log
+        AddToLog(Format('  Query opened', []));
+
+        QFetchMovementsTransactions.First;
+        // save highest TransID of record
+        HighestTrtansID := QFetchMovementsTransactions.FieldByName('Eksporteret').AsInteger;
+        If (Not(QFetchMovementsTransactions.EOF)) then
+        begin
+          // At least 1 record is there - fetch next transactions UD
+          BC_TransactionID := FetchNextTransID('movements transations');
+          lNumberOfExportedMovementsTransactions := 0;
+          RoutineCanceled := FALSE;
+          While (Not(QFetchMovementsTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+          begin
+            RoutineCanceled := NOT CreateAndExportMovementsTransaction;
+            if NOT RoutineCanceled then
+            begin
+              // save highest TransID of record
+              if (HighestTrtansID < QFetchMovementsTransactions.FieldByName('Eksporteret').AsInteger) then
+                HighestTrtansID := QFetchMovementsTransactions.FieldByName('Eksporteret').AsInteger;
+              QFetchMovementsTransactions.Next;
+            end;
+          end;
+          AddToLog('  Iteration done');
+
+          if (NOT(RoutineCanceled)) then
+          begin
+            if NOT OnlyTestRoutine then
+            begin
+              AddToLog('  Marking records as exported');
+              AddToLog(Format('  Will set EKSPORTERET to %s. ', [HighestTrtansID.ToString]));
+
+              QSalesTransactionsTemp.SQL.Clear;
+              QSalesTransactionsTemp.SQL.Add('Update Transaktioner set ');
+              QSalesTransactionsTemp.SQL.Add('  Eksporteret = :P1 ');
+              QSalesTransactionsTemp.SQL.Add('where ');
+              QSalesTransactionsTemp.SQL.Add('  dato>=:PDato and ');
+              QSalesTransactionsTemp.SQL.Add('  dato<=:PDato2 and ');
+              QSalesTransactionsTemp.SQL.Add('  art IN (14) and ');
+              QSalesTransactionsTemp.SQL.Add('  (EKSPORTERET>=0 or EKSPORTERET IS null) ');
+              QSalesTransactionsTemp.ParamByName('P1').AsInteger := HighestTrtansID;
+              QSalesTransactionsTemp.ParamByName('PDato').AsDateTime := lFromDateAndTime;
+              QSalesTransactionsTemp.ParamByName('PDato2').AsDateTime := lToDateAndTime;
+              QSalesTransactionsTemp.ExecSQL;
+            end;
+
+            if (tnMain.Active) then
+              tnMain.Commit;
+
+            iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
+            InsertTracingLog(11, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end
+          else
+          begin
+            lText := 'Der skete en fejl ved synkronisering af flytningstransaktioner til Business Central.' + #13#10 +
+              'Vedhæftet er en fil med information' + #13#10;
+            SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
+            // Rename error file
+            TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+            if (tnMain.Active) then
+              tnMain.Rollback;
+            AddToLog('  Export of movements transaction ended with errors.');
+            InsertTracingLog(12, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end;
+          iniFile.WriteDateTime('MovementsTransaction', 'Last time sync to BC was tried', NOW);
+          AddToLog('  Routine done');
+        end
+        else
+        begin
+          if (tnMain.Active) then
+            tnMain.Commit;
+          AddToLog(Format('  No Movements transactions to export', []));
+        end;
+      finally
+        AddToLog('  TBusinessCentral - Free');
+        FReeAndNil(lBusinessCentral);
+      end;
+    finally
+      AddToLog('  TBusinessCentralSetup - Free');
+      FReeAndNil(lBusinessCentralSetup);
+    end;
+
+    DisconnectFromDB;
+  end;
   AddToLog('DoSyncronizeMovemmentsTransaction - END');
+end;
+
+procedure TDM.DoSyncronizeStockRegulationTransaction;
+const
+  lStockRegulationsTransactionErrorFileName: String = 'StockRegulationstransactionErrors.txt';
+var
+  lBusinessCentralSetup: TBusinessCentralSetup;
+  lBusinessCentral: TBusinessCentral;
+  lDaysToLookAfterRecords: Integer;
+  lDateAndTimeOfLastRun: TDateTime;
+  lFromDateAndTime: TDateTime;
+  lToDateAndTime: Extended;
+  HighestTrtansID: Integer;
+  BC_TransactionID: Integer;
+  lNumberOfExportedStockRegulationTransactions: Integer;
+  RoutineCanceled: Boolean;
+  lText: string;
+  lResponse: TBusinessCentral_Response;
+
+  Function CreateAndExporStockRegulationsTransaction: Boolean;
+  var
+    lJSONStr: string;
+    DoContinue: Boolean;
+    lErrotString: string;
+    lkmItemAccess: TkmItemAccess;
+  begin
+    lkmItemAccess := TkmItemAccess.Create;
+    try
+      lkmItemAccess.transId := BC_TransactionID;
+      lkmItemAccess.butikId := QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString;
+      lkmItemAccess.leverandRKode := QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString;
+      lkmItemAccess.lagertilgangsnummer := QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString;
+      lkmItemAccess.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+      lkmItemAccess.belB := QFetchStockRegulationsTransactions.FieldByName('Belob').AsFloat;
+      lkmItemAccess.status := '0';
+      lkmItemAccess.tilbagefRt := FALSE;
+      lkmItemAccess.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+      lkmItemAccess.transTid := FormatDateTime('hh:mm:ss', NOW);
+
+      lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemAccess);
+
+      INC(lNumberOfExportedStockRegulationTransactions);
+      // Add to log
+      AddToLog(Format('  Stock regulation transaction record to transfer: %d - %s', [lNumberOfExportedStockRegulationTransactions, lJSONStr]));
+      if OnlyTestRoutine then
+      begin
+        DoContinue := TRUE;
+      end
+      else
+      begin
+        DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse, TRUE));
+      end;
+
+      if DoContinue then
+      begin
+        Result := TRUE;
+      end
+      else
+      begin
+        Result := FALSE;
+
+        lErrotString := 'Unexpected error when inserting stock regulation transaction in BC ' + #13#10 +
+          '  EP Bonnr: ' + QFetchStockRegulationsTransactions.FieldByName('LagerTilgangsNummer').AsString + #13#10 +
+          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+          '  JSON: ' + lJSONStr + #13#10;
+        AddToLog(lErrotString);
+        AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
+      end;
+      FReeAndNil(lResponse);
+    finally
+      FReeAndNil(lkmItemAccess);
+    end;
+  end;
+
+begin
+  AddToLog('DoSyncronizeStockRegulationTransaction - BEGIN');
+  if (ConnectToDB) then
+  begin
+    AddToLog('  TBusinessCentralSetup.Create');
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    try
+      AddToLog('  TBusinessCentral.Create');
+      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+      try
+        if (NOT(tnMain.Active)) then
+          tnMain.StartTransaction;
+
+        // Date of last run
+        lDaysToLookAfterRecords := iniFile.ReadInteger('StockRegulation', 'Days to look for records', 5);
+        lDateAndTimeOfLastRun := iniFile.ReadDateTime('StockRegulation', 'Last run', NOW - lDaysToLookAfterRecords);
+        lFromDateAndTime := lDateAndTimeOfLastRun;
+        // Date until now
+        lToDateAndTime := NOW;
+
+        // Log
+        AddToLog(Format('  Fetching records. Stock regulation transactons. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+
+        // Fetch movements transactions.
+        QFetchStockRegulationsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+        QFetchStockRegulationsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+        QFetchStockRegulationsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'StockRegulationsTransactions.SQL');
+        QFetchStockRegulationsTransactions.Open;
+
+        // Log
+        AddToLog(Format('  Query opened', []));
+
+        QFetchStockRegulationsTransactions.First;
+        // save highest TransID of record
+        HighestTrtansID := QFetchStockRegulationsTransactions.FieldByName('Eksporteret').AsInteger;
+        If (Not(QFetchStockRegulationsTransactions.EOF)) then
+        begin
+          // At least 1 record is there - fetch next transactions UD
+          BC_TransactionID := FetchNextTransID('movements transations');
+          lNumberOfExportedStockRegulationTransactions := 0;
+          RoutineCanceled := FALSE;
+          While (Not(QFetchStockRegulationsTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+          begin
+            RoutineCanceled := NOT CreateAndExporStockRegulationsTransaction;
+            if NOT RoutineCanceled then
+            begin
+              // save highest TransID of record
+              if (HighestTrtansID < QFetchStockRegulationsTransactions.FieldByName('Eksporteret').AsInteger) then
+                HighestTrtansID := QFetchStockRegulationsTransactions.FieldByName('Eksporteret').AsInteger;
+              QFetchStockRegulationsTransactions.Next;
+            end;
+          end;
+          AddToLog('  Iteration done');
+
+          if (NOT(RoutineCanceled)) then
+          begin
+            if NOT OnlyTestRoutine then
+            begin
+              AddToLog('  Marking records as exported');
+              AddToLog(Format('  Will set EKSPORTERET to %s. ', [HighestTrtansID.ToString]));
+
+              QStockRegulationsTransationsTemp.SQL.Clear;
+              QStockRegulationsTransationsTemp.SQL.Add('Update Transaktioner set ');
+              QStockRegulationsTransationsTemp.SQL.Add('  Eksporteret = :P1 ');
+              QStockRegulationsTransationsTemp.SQL.Add('where ');
+              QStockRegulationsTransationsTemp.SQL.Add('  dato>=:PDato and ');
+              QStockRegulationsTransationsTemp.SQL.Add('  dato<=:PDato2 and ');
+              QStockRegulationsTransationsTemp.SQL.Add('  art IN (11) and ');
+              QStockRegulationsTransationsTemp.SQL.Add('  (EKSPORTERET>=0 or EKSPORTERET IS null) ');
+              QStockRegulationsTransationsTemp.ParamByName('P1').AsInteger := HighestTrtansID;
+              QStockRegulationsTransationsTemp.ParamByName('PDato').AsDateTime := lFromDateAndTime;
+              QStockRegulationsTransationsTemp.ParamByName('PDato2').AsDateTime := lToDateAndTime;
+              QStockRegulationsTransationsTemp.ExecSQL;
+            end;
+
+            if (tnMain.Active) then
+              tnMain.Commit;
+
+            iniFile.WriteDateTime('StockRegulation', 'Last run', lToDateAndTime);
+            InsertTracingLog(7, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end
+          else
+          begin
+            lText := 'Der skete en fejl ved synkronisering af tilgangstransaktioner til Business Central.' + #13#10 +
+              'Vedhæftet er en fil med information' + #13#10;
+            SendErrorMail(LogFileFolder + lStockRegulationsTransactionErrorFileName, 'tilgangstransaktioner', lText);
+            // Rename error file
+            TFile.Move(LogFileFolder + lStockRegulationsTransactionErrorFileName, LogFileFolder + Format('Error_Tilgangstransaktioner_%s.txt',
+              [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+            if (tnMain.Active) then
+              tnMain.Rollback;
+            AddToLog('  Export of stock regulation transaction ended with errors.');
+            InsertTracingLog(8, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+          end;
+          iniFile.WriteDateTime('StockRegulation', 'Last time sync to BC was tried', NOW);
+          AddToLog('  Routine done');
+        end
+        else
+        begin
+          if (tnMain.Active) then
+            tnMain.Commit;
+          AddToLog(Format('  No stock regulation transactions to export', []));
+        end;
+      finally
+        AddToLog('  TBusinessCentral - Free');
+        FReeAndNil(lBusinessCentral);
+      end;
+    finally
+      AddToLog('  TBusinessCentralSetup - Free');
+      FReeAndNil(lBusinessCentralSetup);
+    end;
+
+    DisconnectFromDB;
+  end;
+  AddToLog('DoSyncronizeStockRegulationTransaction - END');
 end;
 
 procedure TDM.DoHandleEksportToBusinessCentral;
@@ -1471,6 +1853,7 @@ var
   lSyncronizeItem: Boolean;
   lSyncronizeSalesTransactions: Boolean;
   lSyncronizeMovementsTransactions: Boolean;
+  lSyncronizeStockRegulationsTransactions: Boolean;
 begin
   // This will check what to syncronize and do it.
   try
@@ -1485,11 +1868,13 @@ begin
       lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
       lSyncronizeSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
       lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
+      lSyncronizeStockRegulationsTransactions := iniFile.ReadBool('SYNCRONIZE', 'StockRegulationsTransactions', FALSE);
 
       AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
       AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
       AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
       AddToLog(Format('Syncronize Movements Transaction: %s', [lSyncronizeMovementsTransactions.ToString]));
+      AddToLog(Format('Syncronize Stock regulations Transaction: %s', [lSyncronizeStockRegulationsTransactions.ToString]));
       AddToLog('  ');
 
       if lSyncronizeItem then
@@ -1510,6 +1895,11 @@ begin
       if lSyncronizeMovementsTransactions then
       begin
         DoSyncronizeMovemmentsTransaction;
+      end;
+
+      if lSyncronizeStockRegulationsTransactions then
+      begin
+        DoSyncronizeStockRegulationTransaction;
       end;
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;

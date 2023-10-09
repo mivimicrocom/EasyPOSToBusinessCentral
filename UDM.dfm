@@ -562,8 +562,8 @@ object DM: TDM
       '    4,'
       '    11  '
       #9)
-    Left = 560
-    Top = 408
+    Left = 208
+    Top = 432
     ParamData = <
       item
         Name = 'PAFDELING_ID'
@@ -583,8 +583,8 @@ object DM: TDM
     Transaction = tnMain
     FetchOptions.AssignedValues = [evAutoFetchAll]
     FetchOptions.AutoFetchAll = afDisable
-    Left = 552
-    Top = 471
+    Left = 200
+    Top = 495
   end
   object QFetchSalesTransactions: TFDQuery
     Connection = dbMain
@@ -624,9 +624,10 @@ object DM: TDM
       '  tr.dato>=:PFromDate and '
       '  tr.dato<=:PToDate and '
       '  tr.art IN (0,1) '
+      '  and (tr.EKSPORTERET=0 or tr.EKSPORTERET IS null)'
       'Order by 1')
-    Left = 304
-    Top = 424
+    Left = 920
+    Top = 240
     ParamData = <
       item
         Name = 'PFROMDATE'
@@ -642,8 +643,8 @@ object DM: TDM
     Transaction = tnMain
     FetchOptions.AssignedValues = [evAutoFetchAll]
     FetchOptions.AutoFetchAll = afDisable
-    Left = 296
-    Top = 487
+    Left = 912
+    Top = 303
   end
   object INS_Sladre: TFDQuery
     Connection = dbMain
@@ -716,5 +717,115 @@ object DM: TDM
         Name = 'PUAFD_GRP_NAVN'
         ParamType = ptInput
       end>
+  end
+  object QFetchMovementsTransactions: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'SELECT'
+      '    tr.Eksporteret,'
+      '    tr.TransID AS EPID,'
+      '    tr.BONNR AS FlytningsID,'
+      '    tr.dato AS Bogforingsdato,'
+      '    tr.TILBUTIK AS TilButik2,'
+      '    (SELECT'
+      '         NAVISION_IDX'
+      '     FROM afdeling'
+      '     WHERE'
+      '         afdelingsnummer = TR.TILBUTIK) AS TIlButik,'
+      '    tr.AFDELING_ID AS FraButik2,'
+      '    af.NAVISION_IDX AS FraButik,'
+      '    tr.VAREFRVSTRNR AS VareID,'
+      '    vfs.V509INDEX AS VariantID,'
+      '    tr.SalgStk AS Antal,'
+      '    tr.KostPr AS KostPris'
+      'FROM TRansaktioner tr'
+      
+        '    INNER JOIN afdeling af ON (af.AFDELINGSNUMMER = tr.AFDELING_' +
+        'ID)'
+      
+        '    LEFT JOIN varefrvstr vfs ON (vfs.VAREPLU_ID = tr.VAREFRVSTRN' +
+        'R AND'
+      '          vfs.FARVE_NAVN = tr.FARVE_NAVN AND'
+      '          vfs.STOERRELSE_NAVN = tr.STOERRELSE_NAVN AND'
+      '          vfs.LAENGDE_NAVN = tr.LAENGDE_NAVN)'
+      'WHERE'
+      '    tr.dato >= :PFromDate AND'
+      '    tr.dato <= :PToDate AND'
+      '    tr.art IN (14) AND'
+      '    tr.Pakkelinje IN (1, 5) /*Kun afgange*/'
+      'ORDER BY'
+      '    1  ')
+    Left = 768
+    Top = 312
+    ParamData = <
+      item
+        Name = 'PFROMDATE'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PTODATE'
+        ParamType = ptInput
+      end>
+  end
+  object QMovementsTransactionsTemp: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 760
+    Top = 375
+  end
+  object QFetchStockRegulationsTransactions: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'SELECT'
+      '    TR.DATO AS Bogforingsdato,'
+      '    Afd.NAVISION_IDX AS ButikID,'
+      '    tr.BONNR AS LagerTilgangsNummer,'
+      '    tr.LEVNAVN,'
+      '    l.V509INDEX AS LeverandorKode,'
+      '    tr.Eksporteret,'
+      '    SUM(tr.KostPr) AS Belob'
+      'FROM Transaktioner tr'
+      
+        '    INNER JOIN Afdeling Afd ON (Afd.AFDELINGSNUMMER = tr.AFDELIN' +
+        'G_ID)'
+      '    INNER JOIN leverandoerer l ON (l.NAVN = tr.LEVNAVN)'
+      'WHERE'
+      '    tr.dato >= :PFromDate AND'
+      '    tr.art = 11 AND'
+      '    tr.dato <= :PToDate AND'
+      '    (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)'
+      'GROUP BY'
+      '    5,'
+      '    4,'
+      '    3,'
+      '    2,'
+      '    1,'
+      '    6'
+      'ORDER BY'
+      '    1,'
+      '    3  ')
+    Left = 568
+    Top = 360
+    ParamData = <
+      item
+        Name = 'PFROMDATE'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PTODATE'
+        ParamType = ptInput
+      end>
+  end
+  object QStockRegulationsTransationsTemp: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 560
+    Top = 423
   end
 end

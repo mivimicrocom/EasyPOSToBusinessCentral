@@ -112,6 +112,35 @@ type
     mmoFinansLog: TRzMemo;
     lblLastruntime: TLabel;
     cbUseTLS: TRzCheckBox;
+    TabSheet7: TRzTabSheet;
+    TabSheet8: TRzTabSheet;
+    TabSheet9: TRzTabSheet;
+    RzTabSheet1: TRzTabSheet;
+    RzLabel28: TRzLabel;
+    RzLabel30: TRzLabel;
+    RzLabel31: TRzLabel;
+    RzNumericEdit1: TRzNumericEdit;
+    RzEdit1: TRzEdit;
+    RzEdit2: TRzEdit;
+    RzLabel32: TRzLabel;
+    edSalesTransactionsDays: TRzNumericEdit;
+    edSalesTransactionsLastRun: TRzEdit;
+    edSalesTransactionsLastTry: TRzEdit;
+    RzLabel33: TRzLabel;
+    RzLabel34: TRzLabel;
+    RzLabel35: TRzLabel;
+    edMovementsTransactionsDays: TRzNumericEdit;
+    edMovementTransactionsLastRun: TRzEdit;
+    edMovementTransactionsLastTry: TRzEdit;
+    RzLabel36: TRzLabel;
+    RzLabel37: TRzLabel;
+    RzLabel38: TRzLabel;
+    edStockRegulationTransactionsDays: TRzNumericEdit;
+    edStockRegulationTransactionsLastRun: TRzEdit;
+    edStockRegulationTransactionsLastTry: TRzEdit;
+    RzLabel39: TRzLabel;
+    RzLabel40: TRzLabel;
+    cbSyncStockRegulations: TRzCheckBox;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -186,6 +215,7 @@ begin
   cbSyncItems.Checked := FiniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
   cbSyncSalesTrans.Checked := FiniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
   cbSyncMovements.Checked := FiniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
+  cbSyncStockRegulations.Checked := FiniFile.ReadBool('SYNCRONIZE', 'StockRegulationsTransactions', FALSE);
 
   edItemsDAys.Text := FiniFile.ReadString('ITEMS', 'Days to look for records', '5');
   edItemsDeparetment.Text := FiniFile.ReadString('ITEMS', 'Department', '');
@@ -195,6 +225,18 @@ begin
   edFinancialRecordsDAys.Text := FiniFile.ReadString('FinancialRecords', 'Days to look for records', '5');
   edFinancialRecordsLastRun.Text := FiniFile.ReadString('FinancialRecords', 'Last run', '');
   edFinancialRecordsLastTry.Text := FiniFile.ReadString('FinancialRecords', 'Last time sync to BC was tried', '');
+
+  edSalesTransactionsDays.Text := FiniFile.ReadString('SalesTransaction', 'Days to look for records', '5');
+  edSalesTransactionsLastRun.Text := FiniFile.ReadString('SalesTransaction', 'Last run', '');
+  edSalesTransactionsLastTry.Text := FiniFile.ReadString('SalesTransaction', 'Last time sync to BC was tried', '');
+
+  edMovementsTransactionsDays.Text := FiniFile.ReadString('MovementsTransaction', 'Days to look for records', '5');
+  edMovementTransactionsLastRun.Text := FiniFile.ReadString('MovementsTransaction', 'Last run', '');
+  edMovementTransactionsLastTry.Text := FiniFile.ReadString('MovementsTransaction', 'Last time sync to BC was tried', '');
+
+  edStockRegulationTransactionsDays.Text := FiniFile.ReadString('StockRegulation', 'Days to look for records', '5');
+  edStockRegulationTransactionsLastRun.Text := FiniFile.ReadString('StockRegulation', 'Last run', '');
+  edStockRegulationTransactionsLastTry.Text := FiniFile.ReadString('StockRegulation', 'Last time sync to BC was tried', '');
 end;
 
 procedure TfrmMain.TabSheet5Show(Sender: TObject);
@@ -329,6 +371,7 @@ begin
   FiniFile.WriteBool('SYNCRONIZE', 'Items', cbSyncItems.Checked);
   FiniFile.WriteBool('SYNCRONIZE', 'SalesTransactions', cbSyncSalesTrans.Checked);
   FiniFile.WriteBool('SYNCRONIZE', 'MovementsTransactions', cbSyncMovements.Checked);
+  FiniFile.WriteBool('SYNCRONIZE', 'StockRegulationsTransactions', cbSyncStockRegulations.Checked);
 
   FiniFile.WriteString('ITEMS', 'Days to look for records', edItemsDAys.Text);
   FiniFile.WriteString('ITEMS', 'Department', edItemsDeparetment.Text);
@@ -338,6 +381,18 @@ begin
   FiniFile.WriteString('FinancialRecords', 'Days to look for records', edFinancialRecordsDAys.Text);
   FiniFile.WriteString('FinancialRecords', 'Last run', edFinancialRecordsLastRun.Text);
   FiniFile.WriteString('FinancialRecords', 'Last time sync to BC was tried', edFinancialRecordsLastTry.Text);
+
+  FiniFile.WriteString('SalesTransaction', 'Days to look for records', edSalesTransactionsDays.Text);
+  FiniFile.WriteString('SalesTransaction', 'Last run', edSalesTransactionsLastRun.Text);
+  FiniFile.WriteString('SalesTransaction', 'Last time sync to BC was tried', edSalesTransactionsLastTry.Text);
+
+  FiniFile.WriteString('MovementsTransaction', 'Days to look for records', edMovementsTransactionsDays.Text);
+  FiniFile.WriteString('MovementsTransaction', 'Last run', edMovementTransactionsLastRun.Text);
+  FiniFile.WriteString('MovementsTransaction', 'Last time sync to BC was tried', edMovementTransactionsLastTry.Text);
+
+  FiniFile.WriteString('StockRegulation', 'Days to look for records', edStockRegulationTransactionsDays.Text);
+  FiniFile.WriteString('StockRegulation', 'Last run', edStockRegulationTransactionsLastRun.Text);
+  FiniFile.WriteString('StockRegulation', 'Last time sync to BC was tried', edStockRegulationTransactionsLastTry.Text);
 end;
 
 procedure TfrmMain.FormClose(Sender: TObject; var Action: TCloseAction);

@@ -5,7 +5,7 @@ object frmMain: TfrmMain
     'Indstillinger til windows serviceprogram (EasyPOS to Business Ce' +
     'ntral)'
   ClientHeight = 662
-  ClientWidth = 888
+  ClientWidth = 1371
   Color = clBtnFace
   Constraints.MinHeight = 480
   Constraints.MinWidth = 728
@@ -22,14 +22,14 @@ object frmMain: TfrmMain
   object RzPageControl1: TRzPageControl
     Left = 0
     Top = 0
-    Width = 888
+    Width = 1371
     Height = 662
     Hint = ''
-    ActivePage = TabSheet2
+    ActivePage = TabSheet3
     Align = alClient
-    TabIndex = 2
+    TabIndex = 3
     TabOrder = 0
-    ExplicitWidth = 884
+    ExplicitWidth = 1367
     ExplicitHeight = 661
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -151,8 +151,8 @@ object frmMain: TfrmMain
       object cbOnlyTest: TRzCheckBox
         Left = 16
         Top = 568
-        Width = 357
-        Height = 19
+        Width = 353
+        Height = 17
         Caption = 
           'Only run as test (noting will be syncronized to Business Central' +
           ')'
@@ -170,8 +170,6 @@ object frmMain: TfrmMain
     end
     object TabSheet1: TRzTabSheet
       Caption = 'Business Central'
-      ExplicitWidth = 880
-      ExplicitHeight = 636
       object RzLabel3: TRzLabel
         Left = 24
         Top = 15
@@ -419,8 +417,8 @@ object frmMain: TfrmMain
       object cbUseTLS: TRzCheckBox
         Left = 120
         Top = 475
-        Width = 63
-        Height = 19
+        Width = 59
+        Height = 17
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -431,38 +429,47 @@ object frmMain: TfrmMain
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 108
-        Height = 17
+        Width = 112
+        Height = 19
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
       end
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
-        Top = 72
-        Width = 166
-        Height = 17
+        Top = 74
+        Width = 170
+        Height = 19
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
       end
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
-        Top = 112
-        Width = 171
-        Height = 17
+        Top = 116
+        Width = 175
+        Height = 19
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
       end
       object cbSyncMovements: TRzCheckBox
         Left = 16
-        Top = 152
-        Width = 204
-        Height = 17
+        Top = 158
+        Width = 208
+        Height = 19
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
+      end
+      object cbSyncStockRegulations: TRzCheckBox
+        Left = 16
+        Top = 200
+        Width = 235
+        Height = 19
+        Caption = 'Syncronize stock regulation transactions'
+        State = cbUnchecked
+        TabOrder = 4
       end
     end
     object tsItems: TRzTabSheet
@@ -589,13 +596,232 @@ object frmMain: TfrmMain
         TabOrder = 2
       end
     end
+    object TabSheet7: TRzTabSheet
+      Caption = 'Sales transaction'
+      ExplicitWidth = 1363
+      ExplicitHeight = 636
+      object RzLabel32: TRzLabel
+        Left = 32
+        Top = 42
+        Width = 335
+        Height = 15
+        Caption = 
+          'Days to look back if routine has never run (no value in Last Run' +
+          ')'
+      end
+      object RzLabel33: TRzLabel
+        Left = 32
+        Top = 231
+        Width = 73
+        Height = 15
+        Caption = 'Last try to run'
+      end
+      object RzLabel34: TRzLabel
+        Left = 32
+        Top = 168
+        Width = 42
+        Height = 15
+        Caption = 'Last run'
+      end
+      object RzTabSheet1: TRzTabSheet
+        Caption = 'Financial records'
+        ExplicitLeft = -1
+        object RzLabel28: TRzLabel
+          Left = 32
+          Top = 42
+          Width = 335
+          Height = 15
+          Caption = 
+            'Days to look back if routine has never run (no value in Last Run' +
+            ')'
+        end
+        object RzLabel30: TRzLabel
+          Left = 32
+          Top = 168
+          Width = 42
+          Height = 15
+          Caption = 'Last run'
+        end
+        object RzLabel31: TRzLabel
+          Left = 32
+          Top = 231
+          Width = 73
+          Height = 15
+          Caption = 'Last try to run'
+        end
+        object RzNumericEdit1: TRzNumericEdit
+          Left = 32
+          Top = 63
+          Width = 65
+          Height = 23
+          TabOrder = 0
+          DisplayFormat = ',0;(,0)'
+        end
+        object RzEdit1: TRzEdit
+          Left = 32
+          Top = 187
+          Width = 665
+          Height = 23
+          Text = ''
+          Enabled = False
+          ReadOnly = True
+          TabOrder = 1
+        end
+        object RzEdit2: TRzEdit
+          Left = 32
+          Top = 250
+          Width = 665
+          Height = 23
+          Text = ''
+          Enabled = False
+          ReadOnly = True
+          TabOrder = 2
+        end
+      end
+      object edSalesTransactionsDays: TRzNumericEdit
+        Left = 32
+        Top = 63
+        Width = 65
+        Height = 23
+        TabOrder = 1
+        DisplayFormat = ',0;(,0)'
+      end
+      object edSalesTransactionsLastRun: TRzEdit
+        Left = 32
+        Top = 187
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 2
+      end
+      object edSalesTransactionsLastTry: TRzEdit
+        Left = 32
+        Top = 255
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 3
+      end
+    end
+    object TabSheet8: TRzTabSheet
+      Caption = 'Movements transactions'
+      object RzLabel35: TRzLabel
+        Left = 32
+        Top = 42
+        Width = 335
+        Height = 15
+        Caption = 
+          'Days to look back if routine has never run (no value in Last Run' +
+          ')'
+      end
+      object RzLabel36: TRzLabel
+        Left = 32
+        Top = 231
+        Width = 73
+        Height = 15
+        Caption = 'Last try to run'
+      end
+      object RzLabel37: TRzLabel
+        Left = 32
+        Top = 168
+        Width = 42
+        Height = 15
+        Caption = 'Last run'
+      end
+      object edMovementsTransactionsDays: TRzNumericEdit
+        Left = 32
+        Top = 63
+        Width = 65
+        Height = 23
+        TabOrder = 0
+        DisplayFormat = ',0;(,0)'
+      end
+      object edMovementTransactionsLastRun: TRzEdit
+        Left = 32
+        Top = 187
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 1
+      end
+      object edMovementTransactionsLastTry: TRzEdit
+        Left = 32
+        Top = 250
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 2
+      end
+    end
+    object TabSheet9: TRzTabSheet
+      Caption = 'Stock regulation transations'
+      object RzLabel38: TRzLabel
+        Left = 32
+        Top = 42
+        Width = 335
+        Height = 15
+        Caption = 
+          'Days to look back if routine has never run (no value in Last Run' +
+          ')'
+      end
+      object RzLabel39: TRzLabel
+        Left = 32
+        Top = 231
+        Width = 73
+        Height = 15
+        Caption = 'Last try to run'
+      end
+      object RzLabel40: TRzLabel
+        Left = 32
+        Top = 168
+        Width = 42
+        Height = 15
+        Caption = 'Last run'
+      end
+      object edStockRegulationTransactionsDays: TRzNumericEdit
+        Left = 32
+        Top = 63
+        Width = 65
+        Height = 23
+        TabOrder = 0
+        DisplayFormat = ',0;(,0)'
+      end
+      object edStockRegulationTransactionsLastRun: TRzEdit
+        Left = 32
+        Top = 187
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 1
+      end
+      object edStockRegulationTransactionsLastTry: TRzEdit
+        Left = 32
+        Top = 250
+        Width = 665
+        Height = 23
+        Text = ''
+        Enabled = False
+        ReadOnly = True
+        TabOrder = 2
+      end
+    end
     object tsGeneralLog: TRzTabSheet
       OnShow = tsGeneralLogShow
       Caption = 'Programlog'
       object mmoLog: TRzMemo
         Left = 217
         Top = 0
-        Width = 667
+        Width = 1150
         Height = 637
         Align = alClient
         TabOrder = 0
@@ -627,7 +853,7 @@ object frmMain: TfrmMain
       object mmoBCLogs: TRzMemo
         Left = 297
         Top = 0
-        Width = 587
+        Width = 1070
         Height = 637
         Align = alClient
         TabOrder = 1
@@ -649,7 +875,7 @@ object frmMain: TfrmMain
       object mmoFinansLog: TRzMemo
         Left = 297
         Top = 0
-        Width = 587
+        Width = 1070
         Height = 637
         Align = alClient
         TabOrder = 1
