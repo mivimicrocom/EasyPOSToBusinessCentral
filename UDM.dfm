@@ -785,14 +785,22 @@ object DM: TDM
       '    Afd.NAVISION_IDX AS ButikID,'
       '    tr.BONNR AS LagerTilgangsNummer,'
       '    tr.LEVNAVN,'
-      '    l.V509INDEX AS LeverandorKode,'
+      '    (SELECT'
+      '         l.V509INDEX'
+      '     FROM leverandoerer l'
+      '     WHERE'
+      '         l.navn = tr.levnavn) AS LeverandorKode,'
+      '    (SELECT'
+      '         l.Navn'
+      '     FROM leverandoerer l'
+      '     WHERE'
+      '         l.navn = tr.levnavn) AS LeverandorNavn,'
       '    tr.Eksporteret,'
       '    SUM(tr.KostPr) AS Belob'
       'FROM Transaktioner tr'
       
         '    INNER JOIN Afdeling Afd ON (Afd.AFDELINGSNUMMER = tr.AFDELIN' +
         'G_ID)'
-      '    INNER JOIN leverandoerer l ON (l.NAVN = tr.LEVNAVN)'
       'WHERE'
       '    tr.dato >= :PFromDate AND'
       '    tr.art = 11 AND'
@@ -800,11 +808,12 @@ object DM: TDM
       '    (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)'
       'GROUP BY'
       '    5,'
+      '    6,'
       '    4,'
       '    3,'
       '    2,'
       '    1,'
-      '    6'
+      '    7'
       'ORDER BY'
       '    1,'
       '    3  ')
@@ -905,5 +914,161 @@ object DM: TDM
     Connection = dbMain
     Left = 1016
     Top = 474
+  end
+  object QSetEksportedValueOnMovementsTrans: TFDQuery
+    Connection = dbMain
+    Transaction = trSetEksportedValueOnMovementsTrans
+    SQL.Strings = (
+      'Insert Into SladreHank ('
+      '  Dato,'
+      '  Art,'
+      '  LevNavn,'
+      '  Ekspedient,'
+      '  VareFrvStrNr,'
+      '  VareGrpId,'
+      '  BonText,'
+      '  Afdeling_ID,'
+      '  UAfd_Navn,'
+      '  UAfd_Grp_Navn'
+      ')'
+      'Values ('
+      '  :PDato,'
+      '  :PArt,'
+      '  :PLevNavn,'
+      '  :PEkspedient,'
+      '  :PVareFrvStrNr,'
+      '  :PVareGrpId,'
+      '  :PBonText,'
+      '  :PAfdeling_ID,'
+      '  :PUAfd_Navn,'
+      '  :PUAfd_Grp_Navn'
+      ');')
+    Left = 792
+    Top = 496
+    ParamData = <
+      item
+        Name = 'PDATO'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PART'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PLEVNAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PEKSPEDIENT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREFRVSTRNR'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREGRPID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PBONTEXT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_NAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_GRP_NAVN'
+        ParamType = ptInput
+      end>
+  end
+  object trSetEksportedValueOnMovementsTrans: TFDTransaction
+    Options.AutoStop = False
+    Connection = dbMain
+    Left = 808
+    Top = 570
+  end
+  object QSetEksportedValueOnStockTrans: TFDQuery
+    Connection = dbMain
+    Transaction = trSetEksportedValueOnStockTrans
+    SQL.Strings = (
+      'Insert Into SladreHank ('
+      '  Dato,'
+      '  Art,'
+      '  LevNavn,'
+      '  Ekspedient,'
+      '  VareFrvStrNr,'
+      '  VareGrpId,'
+      '  BonText,'
+      '  Afdeling_ID,'
+      '  UAfd_Navn,'
+      '  UAfd_Grp_Navn'
+      ')'
+      'Values ('
+      '  :PDato,'
+      '  :PArt,'
+      '  :PLevNavn,'
+      '  :PEkspedient,'
+      '  :PVareFrvStrNr,'
+      '  :PVareGrpId,'
+      '  :PBonText,'
+      '  :PAfdeling_ID,'
+      '  :PUAfd_Navn,'
+      '  :PUAfd_Grp_Navn'
+      ');')
+    Left = 528
+    Top = 576
+    ParamData = <
+      item
+        Name = 'PDATO'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PART'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PLEVNAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PEKSPEDIENT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREFRVSTRNR'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREGRPID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PBONTEXT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_NAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_GRP_NAVN'
+        ParamType = ptInput
+      end>
+  end
+  object trSetEksportedValueOnStockTrans: TFDTransaction
+    Options.AutoStop = False
+    Connection = dbMain
+    Left = 544
+    Top = 650
   end
 end
