@@ -58,6 +58,8 @@ type
     QMovementsTransactionsTemp: TFDQuery;
     QFetchStockRegulationsTransactions: TFDQuery;
     QStockRegulationsTransationsTemp: TFDQuery;
+    QSetEksportedValueOnSaleTrans: TFDQuery;
+    trSetEksportedValueOnSaleTrans: TFDTransaction;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -821,7 +823,7 @@ var
       end
       else
       begin
-        DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE));
+        DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse));
       end;
 
       if DoContinue then
@@ -1019,7 +1021,7 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, TRUE));
+          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse));
         end;
 
         if DoContinue then
@@ -1096,7 +1098,7 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, TRUE));
+          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse));
         end;
 
         if DoContinue then
@@ -1254,7 +1256,6 @@ var
   lDateAndTimeOfLastRun: TDateTime;
   lFromDateAndTime: TDateTime;
   lToDateAndTime: TDateTime;
-  HighestTrtansID: Integer;
   lNumberOfExportedSalesTransactions: Integer;
   BC_TransactionID: Integer;
   RoutineCanceled: Boolean;
@@ -1267,73 +1268,145 @@ var
     lJSONStr: string;
     DoContinue: Boolean;
     lErrotString: string;
-  begin
-    lkmItemSale := TkmItemSale.Create;
-    try
-      lkmItemSale.transId := BC_TransactionID;
-      lkmItemSale.epId := QFetchSalesTransactions.FieldByName('EpID').AsInteger;
-      lkmItemSale.bonNummer := QFetchSalesTransactions.FieldByName('Bonnummer').AsInteger;
-      lkmItemSale.vareId := QFetchSalesTransactions.FieldByName('VareID').AsString;
-      lkmItemSale.variantId := QFetchSalesTransactions.FieldByName('VariantID').AsString;
-      lkmItemSale.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
-      lkmItemSale.salgstidspunkt := FormatDateTime('hh:mm:ss', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
-      lkmItemSale.antal := QFetchSalesTransactions.FieldByName('Antal').AsFloat;
-      if (QFetchSalesTransactions.FieldByName('Antal').AsFloat <> 0) then
-      begin
-        lkmItemSale.momsbelB := QFetchSalesTransactions.FieldByName('MomsBelob').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
-        lkmItemSale.salgspris := QFetchSalesTransactions.FieldByName('Salgspris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
-        lkmItemSale.kostPris := QFetchSalesTransactions.FieldByName('KostPris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
-      end
-      else
-      begin
-        lkmItemSale.momsbelB := 0;
-        lkmItemSale.salgspris := 0;
-        lkmItemSale.kostPris := 0;
-      end;
-      lkmItemSale.gaveKortId := '0';
-      lkmItemSale.kasse := QFetchSalesTransactions.FieldByName('Kasse').AsString;
-      lkmItemSale.butikId := QFetchSalesTransactions.FieldByName('ButikID').AsString;
-      lkmItemSale.lagerStatus := 'Ubehandlet';
-      lkmItemSale.finansStatus := 'Ubehandlet';
-      lkmItemSale.transDato := FormatDateTime('dd-mm-yyyy', NOW);
-      lkmItemSale.transTid := FormatDateTime('hh:mm:ss', NOW);
+    DoContinueWithInsert: Boolean;
+    lGetResponse: TBusinessCentral_Response;
 
-      lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemSale);
-
-      INC(lNumberOfExportedSalesTransactions);
-
-      // Add to log
-      AddToLog(Format('  Sale transaction record to transfer: %d - %s', [lNumberOfExportedSalesTransactions, lJSONStr]));
-      if OnlyTestRoutine then
-      begin
-        DoContinue := TRUE;
-      end
-      else
-      begin
-        DoContinue := (lBusinessCentral.PostkmItemSale(lBusinessCentralSetup, lkmItemSale, lResponse, TRUE));
-      end;
-
-      if DoContinue then
-      begin
+    function DoMarkSalesTransactionsAsExported: Boolean;
+    begin
+      try
+        if NOT trSetEksportedValueOnSaleTrans.Active then
+        begin
+          trSetEksportedValueOnSaleTrans.StartTransaction;
+        end;
+        QSetEksportedValueOnSaleTrans.SQL.Clear;
+        QSetEksportedValueOnSaleTrans.SQL.Add('Update Transaktioner set ');
+        QSetEksportedValueOnSaleTrans.SQL.Add('  Eksporteret = :PEksporteret ');
+        QSetEksportedValueOnSaleTrans.SQL.Add('where ');
+        QSetEksportedValueOnSaleTrans.SQL.Add('  art IN (0,1) AND');
+        QSetEksportedValueOnSaleTrans.SQL.Add('  TransID = :PTransID AND');
+        QSetEksportedValueOnSaleTrans.SQL.Add('  (EKSPORTERET>=0 or EKSPORTERET IS null) ');
+        QSetEksportedValueOnSaleTrans.ParamByName('PEksporteret').AsInteger := QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger + 1;
+        QSetEksportedValueOnSaleTrans.ParamByName('PTransID').AsInteger := QFetchSalesTransactions.FieldByName('EPID').AsInteger;
+        QSetEksportedValueOnSaleTrans.ExecSQL;
+        if trSetEksportedValueOnSaleTrans.Active then
+        begin
+          trSetEksportedValueOnSaleTrans.Commit;
+        end;
         Result := TRUE;
+      except
+        On E: Exception do
+        begin
+          Result := FALSE;
+          lErrotString := 'Unexpected error when marking sale transaction exported in EasyPOS ' + #13#10 +
+            '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+            '  Message: ' + E.Message;
+          AddToLog(lErrotString);
+          AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+        end;
+      end;
+    end;
+
+  begin
+    AddToLog(Format('  Checking epid %s in Business Central', [QFetchSalesTransactions.FieldByName('EpID').AsString]));
+    lBusinessCentralSetup.FilterValue := Format('epId eq %s', [QFetchSalesTransactions.FieldByName('EpID').AsString]);
+    // Mine order værdier.-
+    lBusinessCentralSetup.OrderValue := '';
+    // Select fields
+    lBusinessCentralSetup.SelectValue := '';
+    // Hent dem.
+    DoContinueWithInsert := lBusinessCentral.GetkmItemSales(lBusinessCentralSetup, lGetResponse);
+
+    if DoContinueWithInsert then
+    begin
+      if (lGetResponse as TkmItemSales).Value.Count = 0 then
+      begin
+        lkmItemSale := TkmItemSale.Create;
+        try
+          lkmItemSale.transId := BC_TransactionID;
+          lkmItemSale.epId := QFetchSalesTransactions.FieldByName('EpID').AsInteger;
+          lkmItemSale.bonNummer := QFetchSalesTransactions.FieldByName('Bonnummer').AsInteger;
+          lkmItemSale.vareId := QFetchSalesTransactions.FieldByName('VareID').AsString;
+          lkmItemSale.variantId := QFetchSalesTransactions.FieldByName('VariantID').AsString;
+          lkmItemSale.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+          lkmItemSale.salgstidspunkt := FormatDateTime('hh:mm:ss', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+          lkmItemSale.antal := QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+          if (QFetchSalesTransactions.FieldByName('Antal').AsFloat <> 0) then
+          begin
+            lkmItemSale.momsbelB := QFetchSalesTransactions.FieldByName('MomsBelob').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+            lkmItemSale.salgspris := QFetchSalesTransactions.FieldByName('Salgspris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+            lkmItemSale.kostPris := QFetchSalesTransactions.FieldByName('KostPris').AsFloat / QFetchSalesTransactions.FieldByName('Antal').AsFloat;
+          end
+          else
+          begin
+            lkmItemSale.momsbelB := 0;
+            lkmItemSale.salgspris := 0;
+            lkmItemSale.kostPris := 0;
+          end;
+          lkmItemSale.gaveKortId := '0';
+          lkmItemSale.kasse := QFetchSalesTransactions.FieldByName('Kasse').AsString;
+          lkmItemSale.butikId := QFetchSalesTransactions.FieldByName('ButikID').AsString;
+          lkmItemSale.lagerStatus := 'Ubehandlet';
+          lkmItemSale.finansStatus := 'Ubehandlet';
+          lkmItemSale.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+          lkmItemSale.transTid := FormatDateTime('hh:mm:ss', NOW);
+
+          lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemSale);
+
+          INC(lNumberOfExportedSalesTransactions);
+
+          // Add to log
+          AddToLog(Format('  Sale transaction record to transfer: %d - %s', [lNumberOfExportedSalesTransactions, lJSONStr]));
+          if OnlyTestRoutine then
+          begin
+            DoContinue := TRUE;
+          end
+          else
+          begin
+            DoContinue := (lBusinessCentral.PostkmItemSale(lBusinessCentralSetup, lkmItemSale, lResponse));
+          end;
+
+          if DoContinue then
+          begin
+            Result := DoMarkSalesTransactionsAsExported;
+          end
+          else
+          begin
+            Result := FALSE;
+
+            lErrotString := 'Unexpected error when inserting sale transaction in BC ' + #13#10 +
+              '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+              '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+              '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+              '  JSON: ' + lJSONStr + #13#10;
+            AddToLog(lErrotString);
+            AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+          end;
+
+          FReeAndNil(lResponse);
+        finally
+          FReeAndNil(lkmItemSale);
+        end;
       end
       else
       begin
-        Result := FALSE;
-
-        lErrotString := 'Unexpected error when inserting sale transaction in BC ' + #13#10 +
-          '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
-          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
-          '  JSON: ' + lJSONStr + #13#10;
-        AddToLog(lErrotString);
-        AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+        AddToLog(Format('  Already inserted. Skipping epId %s', [QFetchSalesTransactions.FieldByName('EpID').AsString]));
+        Result := DoMarkSalesTransactionsAsExported;
+        Result := TRUE;
       end;
-
-      FReeAndNil(lResponse);
-    finally
-      FReeAndNil(lkmItemSale);
+    end
+    else
+    begin
+      // Do not continue. Some error from BC when trying to get a record
+      Result := FALSE;
+      lErrotString := 'Unexpected error when checking sale transaction in BC ' + #13#10 +
+        '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+        '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+        '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+        '  JSON: ' + lJSONStr + #13#10;
+      AddToLog(lErrotString);
+      AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
     end;
+    FReeAndNil(lGetResponse);
   end;
 
 begin
@@ -1369,10 +1442,7 @@ begin
         // Log
         AddToLog(Format('  Query opened', []));
 
-        QFetchSalesTransactions.First;
-        // save highest TransID of record
-        HighestTrtansID := QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger;
-        If (Not(QFetchSalesTransactions.EOF)) then
+        if QFetchSalesTransactions.RecordCount > 0 then
         begin
           // At least 1 record is there - fetch next transactions UD
           BC_TransactionID := FetchNextTransID('sales transations');
@@ -1384,8 +1454,6 @@ begin
             if NOT RoutineCanceled then
             begin
               // save highest TransID of record
-              if (HighestTrtansID < QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger) then
-                HighestTrtansID := QFetchSalesTransactions.FieldByName('Eksporteret').AsInteger;
               QFetchSalesTransactions.Next;
             end;
           end;
@@ -1393,33 +1461,19 @@ begin
 
           if (NOT(RoutineCanceled)) then
           begin
+            ///All good
             if NOT OnlyTestRoutine then
             begin
-              AddToLog('  Marking records as exported');
-              AddToLog(Format('  Will set EKSPORTERET to %s. ', [HighestTrtansID.ToString]));
+              if (tnMain.Active) then
+                tnMain.Commit;
 
-              QSalesTransactionsTemp.SQL.Clear;
-              QSalesTransactionsTemp.SQL.Add('Update Transaktioner set ');
-              QSalesTransactionsTemp.SQL.Add('  Eksporteret = :P1 ');
-              QSalesTransactionsTemp.SQL.Add('where ');
-              QSalesTransactionsTemp.SQL.Add('  dato>=:PDato and ');
-              QSalesTransactionsTemp.SQL.Add('  dato<=:PDato2 and ');
-              QSalesTransactionsTemp.SQL.Add('  art IN (0,1) and ');
-              QSalesTransactionsTemp.SQL.Add('  (EKSPORTERET>=0 or EKSPORTERET IS null) ');
-              QSalesTransactionsTemp.ParamByName('P1').AsInteger := HighestTrtansID;
-              QSalesTransactionsTemp.ParamByName('PDato').AsDateTime := lFromDateAndTime;
-              QSalesTransactionsTemp.ParamByName('PDato2').AsDateTime := lToDateAndTime;
-              QSalesTransactionsTemp.ExecSQL;
+              iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
+              InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
             end;
-
-            if (tnMain.Active) then
-              tnMain.Commit;
-
-            iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
-            InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
           end
           else
           begin
+            //Some error
             lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
               'Vedhæftet er en fil med information' + #13#10;
             SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
@@ -1511,7 +1565,7 @@ var
       end
       else
       begin
-        DoContinue := (lBusinessCentral.PostkmItemMove(lBusinessCentralSetup, lkmItemMove, lResponse, TRUE));
+        DoContinue := (lBusinessCentral.PostkmItemMove(lBusinessCentralSetup, lkmItemMove, lResponse));
       end;
 
       if DoContinue then
@@ -1627,7 +1681,8 @@ begin
               'Vedhæftet er en fil med information' + #13#10;
             SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
             // Rename error file
-            TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+            TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt',
+              [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
             if (tnMain.Active) then
               tnMain.Rollback;
             AddToLog('  Export of movements transaction ended with errors.');
@@ -1704,7 +1759,7 @@ var
       end
       else
       begin
-        DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse, TRUE));
+        DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse));
       end;
 
       if DoContinue then
@@ -1946,8 +2001,10 @@ var
   end;
 
   function ItIsTimeToRun: Boolean;
+{$IFNDEF DEBUG}
   var
     lCurrentHour: string;
+{$ENDIF}
   begin
 {$IFDEF DEBUG}
     Result := TRUE;
@@ -2057,3 +2114,4 @@ begin
 end;
 
 end.
+

@@ -497,8 +497,8 @@ object DM: TDM
     Connection = dbMain
     Transaction = tnMain
     StoredProcName = 'GETNAVISION_TRANSID'
-    Left = 336
-    Top = 208
+    Left = 280
+    Top = 192
     ParamData = <
       item
         Position = 1
@@ -827,5 +827,83 @@ object DM: TDM
     FetchOptions.AutoFetchAll = afDisable
     Left = 560
     Top = 423
+  end
+  object QSetEksportedValueOnSaleTrans: TFDQuery
+    Connection = dbMain
+    Transaction = trSetEksportedValueOnSaleTrans
+    SQL.Strings = (
+      'Insert Into SladreHank ('
+      '  Dato,'
+      '  Art,'
+      '  LevNavn,'
+      '  Ekspedient,'
+      '  VareFrvStrNr,'
+      '  VareGrpId,'
+      '  BonText,'
+      '  Afdeling_ID,'
+      '  UAfd_Navn,'
+      '  UAfd_Grp_Navn'
+      ')'
+      'Values ('
+      '  :PDato,'
+      '  :PArt,'
+      '  :PLevNavn,'
+      '  :PEkspedient,'
+      '  :PVareFrvStrNr,'
+      '  :PVareGrpId,'
+      '  :PBonText,'
+      '  :PAfdeling_ID,'
+      '  :PUAfd_Navn,'
+      '  :PUAfd_Grp_Navn'
+      ');')
+    Left = 1000
+    Top = 400
+    ParamData = <
+      item
+        Name = 'PDATO'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PART'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PLEVNAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PEKSPEDIENT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREFRVSTRNR'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PVAREGRPID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PBONTEXT'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_NAVN'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PUAFD_GRP_NAVN'
+        ParamType = ptInput
+      end>
+  end
+  object trSetEksportedValueOnSaleTrans: TFDTransaction
+    Options.AutoStop = False
+    Connection = dbMain
+    Left = 1016
+    Top = 474
   end
 end
