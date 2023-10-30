@@ -609,6 +609,8 @@ var
     lErrotString: string;
     lJSONStr: string;
     DoContinue: Boolean;
+    DoContinueWithInsert: Boolean;
+    lGetResponse: TBusinessCentral_Response;
 
     function GetButiksID(lAfdNr: String): String;
     begin
@@ -697,223 +699,239 @@ var
     end;
 
   begin
-    lkmCashstatement := TkmCashstatement.Create;
-    try
-      lkmCashstatement.transId := BC_TransactionID;
-      lkmCashstatement.epId := QFetchFinancialRecords.FieldByName('ID').AsInteger;
+    AddToLog(Format('  Checking ID %s in Business Central', [QFetchFinancialRecords.FieldByName('ID').AsString]));
+    lBusinessCentralSetup.FilterValue := Format('epId eq %s', [QFetchFinancialRecords.FieldByName('ID').AsString]);
+    // Mine order værdier.-
+    lBusinessCentralSetup.OrderValue := '';
+    // Select fields
+    lBusinessCentralSetup.SelectValue := '';
+    // Hent dem.
+    DoContinueWithInsert := lBusinessCentral.GetkmCashstatements(lBusinessCentralSetup, lGetResponse);
 
-      lkmCashstatement.transDato := FormatDateTime('dd-mm-yyyy', NOW);
-      lkmCashstatement.transTid := FormatDateTime('hh:mm:ss', NOW);
+    if DoContinueWithInsert then
+    begin
+      if (lGetResponse as TkmCashstatements).Value.Count = 0 then
+      begin
+        lkmCashstatement := TkmCashstatement.Create;
+        try
+          lkmCashstatement.transId := BC_TransactionID;
+          lkmCashstatement.epId := QFetchFinancialRecords.FieldByName('ID').AsInteger;
 
-      lkmCashstatement.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
+          lkmCashstatement.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+          lkmCashstatement.transTid := FormatDateTime('hh:mm:ss', NOW);
 
-      if (length(QFetchFinancialRecords.FieldByName('Tekst').AsString) > 50) then
-        lkmCashstatement.text := Copy(QFetchFinancialRecords.FieldByName('Tekst').AsString, 1, 50)
-      else
-        lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
+          lkmCashstatement.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
 
-      // 0=Finans,1=Debitor,2=Bank,3=Gavekort,4=Tilgodeseddel
-      Case QFetchFinancialRecords.FieldByName('POstType').AsInteger of
-        0: // Oms.
-          begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        1: // Debitor
-          begin
-            lkmCashstatement.type_ := '1';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        3: // Indbetalinger
-          begin
-            lkmCashstatement.type_ := '1';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        4: // Udbetalinger
-          begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-            // Vil det være muligt at lave en ”fedtmule” løsning, hvor der under eksport af finansposter til BC kunne laves en konvertering fra F til K hvis
-            // kontonummeret er 86123444?
-            if (lkmCashstatement.id = '86123444') then
-            begin
-              lkmCashstatement.type_ := '2';
-            end;
-          end;
-        5: // Afr.
-          begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        7: // Diff.
-          begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        8: // Forskydning
-          begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        21: // Aconto
-          begin
-            lkmCashstatement.type_ := '1';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-          end;
-        22: // Tilgodeseddel
-          begin
-            if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 50) then
-            begin
-              // Modtaget en tilgodeseddel
-              // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
-              lkmCashstatement.type_ := '0';
-              // Kontonummer eller debitornummer
-              lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-            end
-            else
-            begin
-              // Udstedt en tilgodeseddel
+          if (length(QFetchFinancialRecords.FieldByName('Tekst').AsString) > 50) then
+            lkmCashstatement.text := Copy(QFetchFinancialRecords.FieldByName('Tekst').AsString, 1, 50)
+          else
+            lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
 
-              // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
-              lkmCashstatement.type_ := '0';
-              // Kontonummer eller debitornummer
-              // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
-              lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-            end;
-          end;
-        23: // Gavekort
-          begin
-            if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 120) then
-            begin
-              // Modtaget et gavekort
-              ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
-                (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
-              if (ExponGV) then
-                lkmCashstatement.type_ := '0'
-              else
-                lkmCashstatement.type_ := '3';
-
-              // Dette bliver det scannede gavekortsnummer
-              lStr := Trim(QFetchFinancialRecords.FieldByName('Tekst').AsString);
-              While (POS('GV ', lStr) > 0) do
-                Delete(lStr, POS('GV ', lStr), 3);
-
-              if (ExponGV) then
+          // 0=Finans,1=Debitor,2=Bank,3=Gavekort,4=Tilgodeseddel
+          Case QFetchFinancialRecords.FieldByName('POstType').AsInteger of
+            0: // Oms.
               begin
-                lkmCashstatement.bilagsnummer := lStr;
-                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-              end
-              else
-              begin
-                lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
-                lkmCashstatement.id := lStr;
-              end;
-
-              lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
-            end
-            else
-            begin
-              // Udstedt et gavekort
-              ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
-                (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
-              if (ExponGV) then
-              begin
-                // Gamle elektroniske (8370) eller nye (8372)
                 lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
                 lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-                if ((Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString))) then
-                  lkmCashstatement.bilagsnummer := Trim(QFetchFinancialRecords.FieldByName('BilagsNr2').AsString)
-                else
-                  lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-
-              end
-              else
-              begin
-                lkmCashstatement.type_ := '3';
-                // Rettet efter Oles anvisning.
-                lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
               end;
-            end;
+            1: // Debitor
+              begin
+                lkmCashstatement.type_ := '1';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            3: // Indbetalinger
+              begin
+                lkmCashstatement.type_ := '1';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            4: // Udbetalinger
+              begin
+                lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                // Vil det være muligt at lave en ”fedtmule” løsning, hvor der under eksport af finansposter til BC kunne laves en konvertering fra F til K hvis
+                // kontonummeret er 86123444?
+                if (lkmCashstatement.id = '86123444') then
+                begin
+                  lkmCashstatement.type_ := '2';
+                end;
+              end;
+            5: // Afr.
+              begin
+                lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            7: // Diff.
+              begin
+                lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            8: // Forskydning
+              begin
+                lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            21: // Aconto
+              begin
+                lkmCashstatement.type_ := '1';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
+            22: // Tilgodeseddel
+              begin
+                if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 50) then
+                begin
+                  // Modtaget en tilgodeseddel
+                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  lkmCashstatement.type_ := '0';
+                  // Kontonummer eller debitornummer
+                  lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                end
+                else
+                begin
+                  // Udstedt en tilgodeseddel
 
+                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  lkmCashstatement.type_ := '0';
+                  // Kontonummer eller debitornummer
+                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                end;
+              end;
+            23: // Gavekort
+              begin
+                if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 120) then
+                begin
+                  // Modtaget et gavekort
+                  ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
+                    (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
+                  if (ExponGV) then
+                    lkmCashstatement.type_ := '0'
+                  else
+                    lkmCashstatement.type_ := '3';
+
+                  // Dette bliver det scannede gavekortsnummer
+                  lStr := Trim(QFetchFinancialRecords.FieldByName('Tekst').AsString);
+                  While (POS('GV ', lStr) > 0) do
+                    Delete(lStr, POS('GV ', lStr), 3);
+
+                  if (ExponGV) then
+                  begin
+                    lkmCashstatement.bilagsnummer := lStr;
+                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                  end
+                  else
+                  begin
+                    lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
+                    lkmCashstatement.id := lStr;
+                  end;
+
+                  lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
+                end
+                else
+                begin
+                  // Udstedt et gavekort
+                  ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
+                    (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
+                  if (ExponGV) then
+                  begin
+                    // Gamle elektroniske (8370) eller nye (8372)
+                    lkmCashstatement.type_ := '0';
+                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                    if ((Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString))) then
+                      lkmCashstatement.bilagsnummer := Trim(QFetchFinancialRecords.FieldByName('BilagsNr2').AsString)
+                    else
+                      lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
+
+                  end
+                  else
+                  begin
+                    lkmCashstatement.type_ := '3';
+                    // Rettet efter Oles anvisning.
+                    lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
+                  end;
+                end;
+
+              end;
+            99: // Int. afd. salg
+              begin
+                lkmCashstatement.type_ := '0';
+                // Kontonummer eller debitornummer
+                lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+              end;
           end;
-        99: // Int. afd. salg
+
+          lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
+
+          lkmCashstatement.afdeling := QFetchFinancialRecords.FieldByName('Afdeling').AsString;
+          lkmCashstatement.kasse := QFetchFinancialRecords.FieldByName('UAfd_Navn').AsString;
+          lkmCashstatement.belB := QFetchFinancialRecords.FieldByName('Belob').AsFloat;
+          lkmCashstatement.butik := GetButiksID(QFetchFinancialRecords.FieldByName('Afdeling_ID').AsString);
+          lkmCashstatement.status := '0';
+
+          lJSONStr := GetDefaultSerializer.SerializeObject(lkmCashstatement);
+
+          INC(lExportCounter);
+
+          // Add to log
+          AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
+          if OnlyTestRoutine then
           begin
-            lkmCashstatement.type_ := '0';
-            // Kontonummer eller debitornummer
-            lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+            DoContinue := TRUE;
+          end
+          else
+          begin
+            DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse));
           end;
-      end;
 
-      lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-
-      lkmCashstatement.afdeling := QFetchFinancialRecords.FieldByName('Afdeling').AsString;
-      lkmCashstatement.kasse := QFetchFinancialRecords.FieldByName('UAfd_Navn').AsString;
-      lkmCashstatement.belB := QFetchFinancialRecords.FieldByName('Belob').AsFloat;
-      lkmCashstatement.butik := GetButiksID(QFetchFinancialRecords.FieldByName('Afdeling_ID').AsString);
-      lkmCashstatement.status := '0';
-
-      lJSONStr := GetDefaultSerializer.SerializeObject(lkmCashstatement);
-
-      INC(lExportCounter);
-
-      // Add to log
-      AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
-      if OnlyTestRoutine then
-      begin
-        DoContinue := TRUE;
+          if DoContinue then
+          begin
+            WriteEksportedRecordToTextfile;
+            Result := MarkRecordAsHandled(QFetchFinancialRecords.FieldByName('ID').AsInteger);
+          end
+          else
+          begin
+            Result := FALSE;
+            lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
+              '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
+              '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+              '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+              '  JSON: ' + lJSONStr + #13#10;
+            AddToLog(lErrotString);
+            INC(lErrorCounter);
+            AddToErrorLog(lErrotString, lErrorFileName);
+          end;
+          FReeAndNil(lResponse);
+        finally
+          lkmCashstatement.Free;
+        end;
       end
       else
       begin
-        DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse));
-      end;
-
-      if DoContinue then
-      begin
-        WriteEksportedRecordToTextfile;
+        AddToLog(Format('  Already inserted. Skipping ID %s', [QFetchFinancialRecords.FieldByName('ID').AsString]));
         Result := MarkRecordAsHandled(QFetchFinancialRecords.FieldByName('ID').AsInteger);
-      end
-      else
-      begin
-        Result := FALSE;
-        lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
-          '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
-          '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-          '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
-          '  JSON: ' + lJSONStr + #13#10;
-        AddToLog(lErrotString);
-        INC(lErrorCounter);
-        AddToErrorLog(lErrotString, lErrorFileName);
       end;
-      FReeAndNil(lResponse);
-    finally
-      lkmCashstatement.Free;
+    end
+    else
+    begin
+      // Do not continue. Some error from BC when trying to get a record
+      Result := FALSE;
+      lErrotString := 'Unexpected error when checking financial record in BC ' + #13#10 +
+        '  ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
+        '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+        '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+        '  JSON: ' + lJSONStr + #13#10;
+      AddToLog(lErrotString);
+      AddToErrorLog(lErrotString, lErrorFileName);
     end;
-
+    FReeAndNil(lGetResponse);
   end;
-
-// procedure MarkRecordAsHandled;
-// begin
-// AddToLog('  Mark selected records as handled');
-// QFinansTemp.SQL.Clear;
-//
-// QFinansTemp.SQL.Add('UPDATE Posteringer SET ');
-// QFinansTemp.SQL.Add('    Behandlet = Behandlet + 1 ');
-// QFinansTemp.SQL.Add('WHERE ');
-// QFinansTemp.SQL.Add('    Dato >= :PStartDato AND ');
-// QFinansTemp.SQL.Add('    Dato <= :PSlutDato; ');
-//
-// QFinansTemp.ParamByName('PStartDato').AsDateTime := QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime;
-// QFinansTemp.ParamByName('PSlutDato').AsDateTime := QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime;
-// QFinansTemp.ExecSQL;
-// end;
 
 begin
   AddToLog('DoSyncronizeFinansCialRecords - BEGIN');
@@ -953,25 +971,20 @@ begin
           RoutineCanceled := FALSE;
           // Iterate through result set
 {$IFDEF DEBUG}
-          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) and (lExportCounter<5) do
+          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) and (lExportCounter < 5) do
 {$ENDIF}
 {$IFDEF RELEASE}
-          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) do
+            while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) do
 {$ENDIF}
-          begin
-            RoutineCanceled := NOT CreateAndExportFinancialRecord;
-            if NOT RoutineCanceled then
             begin
-              // save highest TransID of record
-              QFetchFinancialRecords.Next;
+              RoutineCanceled := NOT CreateAndExportFinancialRecord;
+              if NOT RoutineCanceled then
+              begin
+                // save highest TransID of record
+                QFetchFinancialRecords.Next;
+              end;
             end;
-          end;
           AddToLog('  Iteration done');
-
-          // if NOT(OnlyTestRoutine) then
-          // begin
-          // MarkRecordAsHandled;
-          // end;
 
           if (NOT(RoutineCanceled)) then
           begin
@@ -1012,22 +1025,6 @@ begin
         if (tnMain.Active) then
           tnMain.Commit;
 
-        // if (lErrorCounter > 0) then
-        // begin
-        // // Some error occured. Send an mail to user
-        // // Send mail with file LogFolder + lErrorName
-        // // Rename file
-        // lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
-        // 'Vedhæftet er en fil med information' + #13#10;
-        // SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
-        // // Rename error file
-        // TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
-        // InsertTracingLog(16, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
-        // end
-        // else
-        // begin
-        // InsertTracingLog(15, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
-        // end;
       finally
         AddToLog('  TBusinessCentral - Free');
         FReeAndNil(lBusinessCentral);

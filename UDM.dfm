@@ -17,6 +17,7 @@ object DM: TDM
       'Server=10.8.32.21'
       'Port=3070'
       'DriverID=FB')
+    TxOptions.AutoStart = False
     TxOptions.AutoStop = False
     Left = 88
     Top = 184
@@ -27,6 +28,7 @@ object DM: TDM
     Top = 102
   end
   object tnMain: TFDTransaction
+    Options.Isolation = xiReadCommitted
     Options.AutoStart = False
     Options.AutoStop = False
     Connection = dbMain
@@ -741,6 +743,7 @@ object DM: TDM
       end>
   end
   object trSetEksportedValueOnFinancialTrans: TFDTransaction
+    Options.Isolation = xiReadCommitted
     Options.AutoStart = False
     Options.AutoStop = False
     Connection = dbMain
