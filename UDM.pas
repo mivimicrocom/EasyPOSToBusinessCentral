@@ -1084,7 +1084,7 @@ var
       try
         lkmItem.transId := BC_ItemsTransactionID;
         lkmItem.vareId := QFetchItems.FieldByName('VareID').AsString;
-        lkmItem.beskrivelse := QFetchItems.FieldByName('Beskrivelse').AsString;
+        lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString,1,50);
         lkmItem.model := QFetchItems.FieldByName('Model').AsString;
         lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
         lkmItem.salgspris := QFetchItems.FieldByName('SalgsPris').AsFloat;
