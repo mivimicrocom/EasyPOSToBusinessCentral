@@ -1085,7 +1085,7 @@ var
         lkmItem.transId := BC_ItemsTransactionID;
         lkmItem.vareId := QFetchItems.FieldByName('VareID').AsString;
         lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString,1,50);
-        lkmItem.model := QFetchItems.FieldByName('Model').AsString;
+        lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString,1,50);
         lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
         lkmItem.salgspris := QFetchItems.FieldByName('SalgsPris').AsFloat;
         lkmItem.leverandRKode := QFetchItems.FieldByName('LeverandorKode').AsString;
