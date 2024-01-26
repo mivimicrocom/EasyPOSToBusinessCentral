@@ -727,9 +727,11 @@ var
           else
             lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
 
+
+
           // 0=Finans,1=Debitor,2=Bank,3=Gavekort,4=Tilgodeseddel
           Case QFetchFinancialRecords.FieldByName('POstType').AsInteger of
-            0: // Oms.
+            0, 25: // Oms. / Fragt
               begin
                 lkmCashstatement.type_ := '0';
                 // Kontonummer eller debitornummer
@@ -1098,7 +1100,7 @@ var
         if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
           lkmItem.netWeight := lFloat
         else
-          lkmItem.netWeight := 0;
+          lkmItem.netWeight := 1;
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);

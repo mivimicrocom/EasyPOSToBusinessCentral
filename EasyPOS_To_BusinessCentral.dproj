@@ -93,12 +93,12 @@
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
         <AppDPIAwarenessMode>PerMonitor</AppDPIAwarenessMode>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_MinorVer>2023</VerInfo_MinorVer>
-        <VerInfo_Release>1201</VerInfo_Release>
+        <VerInfo_MinorVer>2024</VerInfo_MinorVer>
+        <VerInfo_Release>125</VerInfo_Release>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <VerInfo_Build>46</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=Microcom A/S;FileDescription=$(MSBuildProjectName);FileVersion=1.2023.1201.46;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Build>49</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=Microcom A/S;FileDescription=$(MSBuildProjectName);FileVersion=1.2024.125.49;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <DCC_DebugInformation>2</DCC_DebugInformation>
         <DCC_SymbolReferenceInfo>2</DCC_SymbolReferenceInfo>
         <DCC_MapFile>3</DCC_MapFile>
