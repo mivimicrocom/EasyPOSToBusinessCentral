@@ -1,7 +1,7 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-  FastMM4,
+//  FastMM4,
   {$IFNDEF RELEASE}
   forms,
   System.SysUtils,
