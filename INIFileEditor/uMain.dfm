@@ -25,12 +25,10 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 662
     Hint = ''
-    ActivePage = TabSheet3
+    ActivePage = tsProgram
     Align = alClient
-    TabIndex = 3
+    TabIndex = 0
     TabOrder = 0
-    ExplicitWidth = 1367
-    ExplicitHeight = 661
     FixedDimension = 21
     object tsProgram: TRzTabSheet
       Caption = 'Program'
@@ -151,8 +149,8 @@ object frmMain: TfrmMain
       object cbOnlyTest: TRzCheckBox
         Left = 16
         Top = 568
-        Width = 353
-        Height = 17
+        Width = 357
+        Height = 19
         Caption = 
           'Only run as test (noting will be syncronized to Business Central' +
           ')'
@@ -166,6 +164,14 @@ object frmMain: TfrmMain
         Caption = '*'
         TabOrder = 8
         OnClick = btnSelectFolderClick
+      end
+      object cbHvertMinut: TCheckBox
+        Left = 16
+        Top = 73
+        Width = 230
+        Height = 17
+        Caption = 'K'#248'r i stedet hvert angivet minut'
+        TabOrder = 9
       end
     end
     object TabSheet1: TRzTabSheet
@@ -187,23 +193,23 @@ object frmMain: TfrmMain
       object RzLabel5: TRzLabel
         Left = 24
         Top = 156
-        Width = 76
+        Width = 122
         Height = 15
-        Caption = 'Company URL'
+        Caption = 'Company URL / Tenant'
       end
       object RzLabel9: TRzLabel
         Left = 24
         Top = 227
-        Width = 53
+        Width = 109
         Height = 15
-        Caption = 'Username'
+        Caption = 'Username / Client ID'
       end
       object RzLabel10: TRzLabel
         Left = 24
         Top = 297
-        Width = 50
+        Width = 145
         Height = 15
-        Caption = 'Password'
+        Caption = 'Password / Client Password'
       end
       object RzLabel11: TRzLabel
         Left = 24
@@ -260,6 +266,14 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 5
+      end
+      object cbOnlineBusinessCentral: TCheckBox
+        Left = 24
+        Top = 448
+        Width = 345
+        Height = 17
+        Caption = 'Online Business Central med OAuth2 authentication'
+        TabOrder = 6
       end
     end
     object TabSheet2: TRzTabSheet
@@ -429,8 +443,8 @@ object frmMain: TfrmMain
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 112
-        Height = 19
+        Width = 108
+        Height = 17
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -438,8 +452,8 @@ object frmMain: TfrmMain
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
         Top = 74
-        Width = 170
-        Height = 19
+        Width = 166
+        Height = 17
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -447,8 +461,8 @@ object frmMain: TfrmMain
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
         Top = 116
-        Width = 175
-        Height = 19
+        Width = 171
+        Height = 17
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -456,8 +470,8 @@ object frmMain: TfrmMain
       object cbSyncMovements: TRzCheckBox
         Left = 16
         Top = 158
-        Width = 208
-        Height = 19
+        Width = 204
+        Height = 17
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -465,8 +479,8 @@ object frmMain: TfrmMain
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
         Top = 200
-        Width = 235
-        Height = 19
+        Width = 231
+        Height = 17
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -598,8 +612,6 @@ object frmMain: TfrmMain
     end
     object TabSheet7: TRzTabSheet
       Caption = 'Sales transaction'
-      ExplicitWidth = 1363
-      ExplicitHeight = 636
       object RzLabel32: TRzLabel
         Left = 32
         Top = 42
@@ -625,7 +637,6 @@ object frmMain: TfrmMain
       end
       object RzTabSheet1: TRzTabSheet
         Caption = 'Financial records'
-        ExplicitLeft = -1
         object RzLabel28: TRzLabel
           Left = 32
           Top = 42

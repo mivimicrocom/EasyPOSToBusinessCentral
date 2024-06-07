@@ -1,3 +1,7 @@
+{$IFDEF RELEASE}
+{$ENDIF}
+{$IFDEF DEBUG}
+{$ENDIF}
 unit UDM;
 
 interface
@@ -88,6 +92,8 @@ type
     LF_BC_USERNAME: String;
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
+    LF_BC_Online: Boolean;
+    LF_BC_Version: Integer; // 0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication
 
     function InitialilzeProgram: Boolean;
     procedure DoHandleEksportToBusinessCentral;
@@ -487,6 +493,15 @@ begin
   LF_BC_USERNAME := iniFile.ReadString('BUSINESS CENTRAL', 'BC_USERNAME', '');
   LF_BC_PASSWORD := iniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
   LF_BC_ACTIVECOMPANYID := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
+  LF_BC_Online := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
+  if LF_BC_Online then
+  begin
+    LF_BC_Version := 2;
+  end
+  else
+  begin
+    LF_BC_Version := 0;
+  end;
 
   if (LF_BC_BASEURL = '') AND
     (LF_BC_PORT = 0) AND
@@ -524,10 +539,12 @@ begin
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
   AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
+  AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
+  AddToLog(Format('Business Central version: %s (0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication) ', [LF_BC_Version.ToString]));
 
   Result :=
     ((LF_BC_BASEURL <> '') AND
-    (LF_BC_PORT <> 0) AND
+    // (LF_BC_PORT <> 0) AND
     (LF_BC_COMPANY_URL <> '') AND
     (LF_BC_USERNAME <> '') AND
     (LF_BC_PASSWORD <> '') AND
@@ -658,6 +675,7 @@ var
     begin
       if NOT(OnlyTestRoutine) then
       begin
+{$IFDEF RELEASE}
         try
           if NOT trSetEksportedValueOnFinancialTrans.Active then
           begin
@@ -691,6 +709,11 @@ var
             AddToErrorLog(lErrotString, lErrorFileName);
           end;
         end;
+{$ENDIF}
+{$IFDEF DEBUG}
+        AddToLog('  Will not mark records as handled. Only debug');
+        Result := TRUE;
+{$ENDIF}
       end
       else
       begin
@@ -706,7 +729,7 @@ var
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
     // Hent dem.
-    DoContinueWithInsert := lBusinessCentral.GetkmCashstatements(lBusinessCentralSetup, lGetResponse);
+    DoContinueWithInsert := lBusinessCentral.GetkmCashstatements(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
 
     if DoContinueWithInsert then
     begin
@@ -726,8 +749,6 @@ var
             lkmCashstatement.text := Copy(QFetchFinancialRecords.FieldByName('Tekst').AsString, 1, 50)
           else
             lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
-
-
 
           // 0=Finans,1=Debitor,2=Bank,3=Gavekort,4=Tilgodeseddel
           Case QFetchFinancialRecords.FieldByName('POstType').AsInteger of
@@ -889,7 +910,7 @@ var
           end
           else
           begin
-            DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse));
+            DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE, LF_BC_Version));
           end;
 
           if DoContinue then
@@ -940,7 +961,8 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
@@ -1086,8 +1108,8 @@ var
       try
         lkmItem.transId := BC_ItemsTransactionID;
         lkmItem.vareId := QFetchItems.FieldByName('VareID').AsString;
-        lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString,1,50);
-        lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString,1,50);
+        lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString, 1, 50);
+        lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString, 1, 50);
         lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
         lkmItem.salgspris := QFetchItems.FieldByName('SalgsPris').AsFloat;
         lkmItem.leverandRKode := QFetchItems.FieldByName('LeverandorKode').AsString;
@@ -1113,7 +1135,7 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse));
+          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, LF_BC_Version));
         end;
 
         if DoContinue then
@@ -1150,12 +1172,14 @@ var
         // To this head item we can continue and mark head item as done
         if NOT OnlyTestRoutine then
         begin
+{$IFNDEF DEBUG}
           AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
           QItemsTemp.SQL.Clear;
           QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
           QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
           QItemsTemp.ExecSQL;
           AddToLog(Format('    Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
+{$ENDIF}
         end;
       end;
     end;
@@ -1190,7 +1214,7 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse));
+          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, LF_BC_Version));
         end;
 
         if DoContinue then
@@ -1241,7 +1265,8 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
@@ -1259,6 +1284,88 @@ begin
         AddToLog(Format('  Department: %s ', [lDepartment]));
         AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
+        QFetchItems.SQL.Clear;
+{$IFDEF RELEASE}
+        QFetchItems.SQL.Add(
+          'SELECT DISTINCT ' +
+          '    v.VARENAVN1 AS Beskrivelse, ' +
+          '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' +
+          '    l.V509INDEX AS LeverandorKode, ' +
+          '    t.VAREFRVSTRNR AS VareID, ' +
+          '    v.MODEL AS Model, ' +
+          '    vg.V509INDEX AS Varegruppe, ' +
+          '    vfsd.SALGSPRISSTK AS Salgspris, ' +
+          '    vv.FARVE_NAVN AS Farve, ' +
+          '    vv.STOERRELSE_NAVN AS Storrelse, ' +
+          '    vv.LAENGDE_NAVN AS Laengde, ' +
+          '    vv.V509INDEX AS VariantID, ' +
+          '    v.KATEGORI1 AS Country, ' +
+          '    v.KATEGORI2 AS Weigth, ' +
+          '    v.INTRASTAT ' +
+          'FROM transaktioner t ' +
+          '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' +
+          '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
+          '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' +
+          '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
+          '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
+          '          vfsd.afdeling_ID = :PAfdeling_ID) ' +
+          '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
+          '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' +
+          '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
+          '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
+          '          vv.EKSPORTERET = 0) ' +
+          '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' +
+          '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' +
+          'WHERE ' +
+          '    t.dato >= :PStartDato AND ' +
+          '    t.dato <= :PSlutDato AND ' +
+          '    t.ART IN (0, 1, 11, 14) ' +
+          'ORDER BY ' +
+          '    4, ' +
+          '    11 '
+          );
+{$ENDIF}
+{$IFDEF DEBUG}
+        QFetchItems.SQL.Add(
+          'SELECT DISTINCT ' +
+          '    v.VARENAVN1 AS Beskrivelse, ' +
+          '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' +
+          '    l.V509INDEX AS LeverandorKode, ' +
+          '    t.VAREFRVSTRNR AS VareID, ' +
+          '    v.MODEL AS Model, ' +
+          '    vg.V509INDEX AS Varegruppe, ' +
+          '    vfsd.SALGSPRISSTK AS Salgspris, ' +
+          '    vv.FARVE_NAVN AS Farve, ' +
+          '    vv.STOERRELSE_NAVN AS Storrelse, ' +
+          '    vv.LAENGDE_NAVN AS Laengde, ' +
+          '    vv.V509INDEX AS VariantID, ' +
+          '    v.KATEGORI1 AS Country, ' +
+          '    v.KATEGORI2 AS Weigth, ' +
+          '    v.INTRASTAT ' +
+          'FROM transaktioner t ' +
+          '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' +
+          '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
+          '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' +
+          '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
+          '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
+          '          vfsd.afdeling_ID = :PAfdeling_ID) ' +
+          '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
+          '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' +
+          '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
+          '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
+          '          vv.EKSPORTERET >= 0) ' +
+          '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' +
+          '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' +
+          'WHERE ' +
+          '    t.dato >= :PStartDato AND ' +
+          '    t.dato <= :PSlutDato AND ' +
+          '    t.ART IN (0, 1, 11, 14) ' +
+          '    and Upper(LevNavn)=Upper(''Hugo Boss'') ' +
+          'ORDER BY ' +
+          '    4, ' +
+          '    11 '
+          );
+{$ENDIF}
         QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
         QFetchItems.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
         QFetchItems.ParamByName('PAfdeling_ID').AsString := lDepartment;
@@ -1367,6 +1474,7 @@ var
     begin
       if NOT OnlyTestRoutine then
       begin
+{$IFDEF RELEASE}
         try
           if NOT trSetEksportedValueOnSaleTrans.Active then
           begin
@@ -1398,6 +1506,10 @@ var
             AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
           end;
         end;
+{$ENDIF}
+{$IFDEF DEBUG}
+        Result := TRUE;
+{$ENDIF}
       end
       else
       begin
@@ -1413,7 +1525,7 @@ var
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
     // Hent dem.
-    DoContinueWithInsert := lBusinessCentral.GetkmItemSales(lBusinessCentralSetup, lGetResponse);
+    DoContinueWithInsert := lBusinessCentral.GetkmItemSales(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
 
     if DoContinueWithInsert then
     begin
@@ -1461,7 +1573,7 @@ var
           end
           else
           begin
-            DoContinue := (lBusinessCentral.PostkmItemSale(lBusinessCentralSetup, lkmItemSale, lResponse));
+            DoContinue := (lBusinessCentral.PostkmItemSale(lBusinessCentralSetup, lkmItemSale, lResponse, LF_BC_Version));
           end;
 
           if DoContinue then
@@ -1512,7 +1624,8 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
@@ -1634,6 +1747,7 @@ var
     begin
       if NOT OnlyTestRoutine then
       begin
+{$IFDEF RELEASE}
         try
           if NOT trSetEksportedValueOnMovementsTrans.Active then
           begin
@@ -1665,6 +1779,10 @@ var
             AddToErrorLog(lErrotString, lMovementsTransactionErrorFileName);
           end;
         end;
+{$ENDIF}
+{$IFDEF DEBUG}
+        Result := TRUE;
+{$ENDIF}
       end
       else
       begin
@@ -1680,7 +1798,7 @@ var
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
     // Hent dem.
-    DoContinueWithInsert := lBusinessCentral.GetkmItemMoves(lBusinessCentralSetup, lGetResponse);
+    DoContinueWithInsert := lBusinessCentral.GetkmItemMoves(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
 
     if DoContinueWithInsert then
     begin
@@ -1720,7 +1838,7 @@ var
           end
           else
           begin
-            DoContinue := (lBusinessCentral.PostkmItemMove(lBusinessCentralSetup, lkmItemMove, lResponse));
+            DoContinue := (lBusinessCentral.PostkmItemMove(lBusinessCentralSetup, lkmItemMove, lResponse, LF_BC_Version));
           end;
 
           if DoContinue then
@@ -1770,7 +1888,8 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
@@ -1888,6 +2007,7 @@ var
     begin
       if NOT OnlyTestRoutine then
       begin
+{$IFDEF RELEASE}
         try
           if NOT trSetEksportedValueOnStockTrans.Active then
           begin
@@ -1933,6 +2053,10 @@ var
             AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
           end;
         end;
+{$ENDIF}
+{$IFDEF DEBUG}
+        Result := TRUE;
+{$ENDIF}
       end
       else
       begin
@@ -1958,7 +2082,7 @@ var
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
     // Hent dem.
-    DoContinueWithInsert := lBusinessCentral.GetkmItemAccesss(lBusinessCentralSetup, lGetResponse);
+    DoContinueWithInsert := lBusinessCentral.GetkmItemAccesss(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
 
     if DoContinueWithInsert then
     begin
@@ -1988,7 +2112,7 @@ var
           end
           else
           begin
-            DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse));
+            DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse, LF_BC_Version));
           end;
 
           if DoContinue then
@@ -2045,7 +2169,8 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD);
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
       lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
@@ -2201,7 +2326,9 @@ function TDM.InitialilzeProgram: Boolean;
 *)
 var
   PrgVers1, PrgVers2, PrgVers3, PrgVers4: Word;
+
   glRunTime: string;
+  glRunEachMinute: Boolean;
   glLastRunTime: TDateTime;
 
   procedure GetBuildInfo(var V1, V2, V3, V4: Word);
@@ -2239,25 +2366,32 @@ var
 {$IFDEF DEBUG}
     Result := TRUE;
 {$ELSE}
-    if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
+    if glRunEachMinute then
     begin
-      // It is not today. Check time
-      lCurrentHour := FormatDateTime('hh', NOW);
-      if lCurrentHour = glRunTime then
-      begin
-        // It is time to run
-        Result := TRUE;
-      end
-      else
-      begin
-        // Not the right time to run
-        Result := FALSE;
-      end;
+      Result := TRUE;
     end
     else
     begin
-      // Last run was today. You cannot run more today
-      Result := FALSE;
+      if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
+      begin
+        // It is not today. Check time
+        lCurrentHour := FormatDateTime('hh', NOW);
+        if lCurrentHour = glRunTime then
+        begin
+          // It is time to run
+          Result := TRUE;
+        end
+        else
+        begin
+          // Not the right time to run
+          Result := FALSE;
+        end;
+      end
+      else
+      begin
+        // Last run was today. You cannot run more today
+        Result := FALSE;
+      end;
     end;
 {$ENDIF}
   end;
@@ -2267,12 +2401,16 @@ begin
 
   // glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
   glRunTime := iniFile.ReadString('PROGRAM', 'RUNTIME', '22');
+  glRunEachMinute := iniFile.ReadBool('PROGRAM', 'RUN AT EACH MINUTE', FALSE);
   glLastRunTime := iniFile.ReadDateTime('PROGRAM', 'LAST RUN', NOW - 365);
-{$IFDEF DEBUG}
-  glTimer := 2; // Check every 2 minutes
-{$ELSE}
-  glTimer := 15; // Check every 15 minutes
-{$ENDIF}
+  if glRunEachMinute then
+  begin
+    glTimer := glRunTime.ToInteger;
+  end
+  else
+  begin
+    glTimer := 15; // Check every 15 minutes
+  end;
   LogFileFolder := iniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
   AddToLog('EasyPOS Service to synconize data from EasyPOS to BUsiness Central: ' +
     IntToStr(PrgVers1) + '.' +
@@ -2285,8 +2423,15 @@ begin
   begin
     Result := TRUE;
     AddToLog('It is time to run.');
-    AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
-    AddToLog(Format('  Should run at %s', [glRunTime]));
+    if glRunEachMinute then
+    begin
+      AddToLog(Format('  Run each %s minute(s)', [glRunTime]));
+    end
+    else
+    begin
+      AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
+      AddToLog(Format('  Should run at %s', [glRunTime]));
+    end;
     AddToLog(' ');
 
     SQLLogFileFolder := LogFileFolder + 'SQL\';

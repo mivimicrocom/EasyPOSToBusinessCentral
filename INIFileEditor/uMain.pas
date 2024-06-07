@@ -141,6 +141,8 @@ type
     RzLabel39: TRzLabel;
     RzLabel40: TRzLabel;
     cbSyncStockRegulations: TRzCheckBox;
+    cbOnlineBusinessCentral: TCheckBox;
+    cbHvertMinut: TCheckBox;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -183,6 +185,7 @@ end;
 procedure TfrmMain.ReadSettingsFromINIFile;
 begin
   edTimer.Text := IntToStr(FiniFile.ReadInteger('PROGRAM', 'RUNTIME', 60));
+  cbHvertMinut.Checked := FiniFile.ReadBool('PROGRAM', 'RUN AT EACH MINUTE', FALSE);
   lblLastruntime.Caption := Format('Routine ran last time at: %s',[FiniFile.ReadString('PROGRAM', 'LAST RUN', '')]);
   edLogFolder.Text := FiniFile.ReadString('PROGRAM', 'LOGFILEFOLDER', '');
   edDatabase.Text := FiniFile.ReadString('PROGRAM', 'DATABASE', '');
@@ -198,6 +201,7 @@ begin
   edBCPassword.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
   edBCActiveCompany.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
   edBCPOrt.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_PORT', '');
+  cbOnlineBusinessCentral.Checked := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
 
   edMailSenderName.Text := FiniFile.ReadString('MAIL', 'From name', '');
   edMailSenderMail.Text := FiniFile.ReadString('MAIL', 'From mail', '');
@@ -338,6 +342,7 @@ end;
 procedure TfrmMain.WriteSettingsFromINIFile;
 begin
   FiniFile.WriteInteger('PROGRAM', 'RUNTIME', StrToInt(edTimer.Text));
+  FiniFile.WriteBool('PROGRAM', 'RUN AT EACH MINUTE', cbHvertMinut.Checked);
   FiniFile.WriteString('PROGRAM', 'LOGFILEFOLDER', edLogFolder.Text);
   FiniFile.WriteString('PROGRAM', 'DATABASE', edDatabase.Text);
   FiniFile.WriteString('PROGRAM', 'USER', edUser.Text);
@@ -352,6 +357,7 @@ begin
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_PASSWORD', edBCPassword.Text);
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', edBCActiveCompany.Text);
   FiniFile.WriteInteger('BUSINESS CENTRAL', 'BC_PORT', edBCPOrt.IntValue);
+  FiniFile.WriteBool('BUSINESS CENTRAL', 'Online Business Central', cbOnlineBusinessCentral.Checked);
 
 
   FiniFile.WriteString('MAIL', 'From name', edMailSenderName.Text);
