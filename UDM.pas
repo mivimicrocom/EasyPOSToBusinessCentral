@@ -1072,9 +1072,10 @@ var
   lBusinessCentralSetup: TBusinessCentralSetup;
   lBusinessCentral: TBusinessCentral;
   lDaysToLookAfterRecords: Integer;
-  lFromDateAndTime: Extended;
-  lToDateAndTime: Extended;
+  lFromDateAndTime: TDateTime;
+  lToDateAndTime: TDateTime;
   lExportCounterHeadItems: Integer;
+  lExportCounterHeadItemVariants: Integer;
   lExportCounterVariants: Integer;
   lErrorCounter: Integer;
   lText: string;
@@ -1095,14 +1096,9 @@ var
     Afbrudt: Boolean;
     lJSONStr: string;
     DoContinue: Boolean;
-  begin
-    if (lCurrentHeadItem <> QFetchItems.FieldByName('VareID').AsString) then
-    begin
-      // Set current head item
-      lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
-      // Head item has changed. Do transfer
-      AddToLog(Format('  Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
 
+    Procedure CreateAndInsertHeadItem;
+    begin
       // Build head item
       lkmItem := TkmItem.Create;
       try
@@ -1119,6 +1115,15 @@ var
         lkmItem.transTid := FormatDateTime('hh:mm:ss', NOW);
         lkmItem.tariffNo := QFetchItems.FieldByName('INTRASTAT').AsString;
         lkmItem.countryRegionOfOriginCode := QFetchItems.FieldByName('Country').AsString;
+        lkmItem.Varenavn2 := QFetchItems.FieldByName('Varenavn2').AsString;
+        lkmItem.Varenavn3 := QFetchItems.FieldByName('Varenavn3').AsString;
+        lkmItem.LeverandRnavn := QFetchItems.FieldByName('leverid').AsString;
+        lkmItem.Varegruppenavn := QFetchItems.FieldByName('varegrpid').AsString;
+        lkmItem.Farve := '';
+        lkmItem.Storrelse := '';
+        lkmItem.Laengde := '';
+        lkmItem.EANNummer := '';
+        lkmItem.Leverandoerensvarenummer := '';
         if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
           lkmItem.netWeight := lFloat
         else
@@ -1166,6 +1171,98 @@ var
       finally
         lkmItem.Free;
       end;
+    end;
+
+    Procedure CreateAndInsertVariantItem;
+    begin
+      // Build head item
+      lkmItem := TkmItem.Create;
+      try
+        lkmItem.transId := BC_ItemsTransactionID;
+        lkmItem.vareId := QFetchItems.FieldByName('VariantID').AsString;
+        lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString, 1, 50);
+        lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString, 1, 50);
+        lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
+        lkmItem.salgspris := QFetchItems.FieldByName('SalgsPris').AsFloat;
+        lkmItem.leverandRKode := QFetchItems.FieldByName('LeverandorKode').AsString;
+        lkmItem.varegruppe := QFetchItems.FieldByName('Varegruppe').AsString;
+        lkmItem.status := '0';
+        lkmItem.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+        lkmItem.transTid := FormatDateTime('hh:mm:ss', NOW);
+        lkmItem.tariffNo := QFetchItems.FieldByName('INTRASTAT').AsString;
+        lkmItem.countryRegionOfOriginCode := QFetchItems.FieldByName('Country').AsString;
+        lkmItem.Varenavn2 := QFetchItems.FieldByName('Varenavn2').AsString;
+        lkmItem.Varenavn3 := QFetchItems.FieldByName('Varenavn3').AsString;
+        lkmItem.LeverandRnavn := QFetchItems.FieldByName('leverid').AsString;
+        lkmItem.Varegruppenavn := QFetchItems.FieldByName('varegrpid').AsString;
+        lkmItem.Farve := QFetchItems.FieldByName('Farve').AsString;
+        lkmItem.Storrelse := QFetchItems.FieldByName('Storrelse').AsString;
+        lkmItem.Laengde := QFetchItems.FieldByName('Laengde').AsString;
+        lkmItem.EANNummer := QFetchItems.FieldByName('eannummer').AsString;
+        lkmItem.Leverandoerensvarenummer := QFetchItems.FieldByName('levvarenr').AsString;
+        if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
+          lkmItem.netWeight := lFloat
+        else
+          lkmItem.netWeight := 1;
+
+        // Build JSON string
+        lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
+
+        // Add to log
+        AddToLog(Format('    Variantitem to transfer: %d - %s', [lExportCounterHeadItemVariants, lJSONStr]));
+        if OnlyTestRoutine then
+        begin
+          DoContinue := TRUE;
+        end
+        else
+        begin
+          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, LF_BC_Version));
+        end;
+
+        if DoContinue then
+        begin
+          // Inc amount of transferred head item Varinat
+          INC(lExportCounterHeadItemVariants);
+          // No error or test
+          ContinueWithVariants := TRUE;
+        end
+        else
+        begin
+          AddToLog(Format('    ERROR (more in error file): %s - %s', [
+            (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
+            (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
+          // ERROR - Do not continues with variants
+          ContinueWithVariants := FALSE;
+          // Insert error counter
+          INC(lErrorCounter);
+          // Build error string
+          lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
+            '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
+            '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+            '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
+          // Add to log file.
+          AddToErrorLog(lErrorString, lErrorFileName);
+        end;
+        FReeAndNil(lResponse);
+      finally
+        lkmItem.Free;
+      end;
+    end;
+
+  begin
+    if (lCurrentHeadItem <> QFetchItems.FieldByName('VareID').AsString) then
+    begin
+      (*
+        Head item has change (or its the first record)
+        We need to insert head item into kmItem
+      *)
+      // Set current head item
+      lCurrentHeadItem := QFetchItems.FieldByName('VareID').AsString;
+      // Head item has changed. Do transfer
+      AddToLog(Format('  Adding head item %s to Business Central.', [QFetchItems.FieldByName('VareID').AsString]));
+
+      // Insert into kmItem (hovedvare)
+      CreateAndInsertHeadItem;
 
       if (ContinueWithVariants) then
       begin
@@ -1186,6 +1283,13 @@ var
 
     if (ContinueWithVariants) then
     begin
+      (*
+        We have a variant - Insert this also in kmItemn (New)
+      *)
+
+      // Insert into kmItem (variant)
+      CreateAndInsertVariantItem;
+
       // To this head item we can continue with variants
       Afbrudt := FALSE;
 
@@ -1195,7 +1299,7 @@ var
         lkmVariantId.transId := BC_VariantsTransactionID;
         lkmVariantId.vareId := QFetchItems.FieldByName('VareID').AsString;
         lkmVariantId.variantId := QFetchItems.FieldByName('VariantID').AsString;
-        lkmVariantId.farve := QFetchItems.FieldByName('Farve').AsString;
+        lkmVariantId.Farve := QFetchItems.FieldByName('Farve').AsString;
         lkmVariantId.stRrelse := QFetchItems.FieldByName('Storrelse').AsString;
         lkmVariantId.lNgde := QFetchItems.FieldByName('Laengde').AsString;
         lkmVariantId.status := '0';
@@ -1262,184 +1366,324 @@ var
 
 begin
   AddToLog('DoSyncronizeItems - BEGIN');
-  if (ConnectToDB) then
-  begin
-    AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
-      LF_BC_Version);
-    try
-      AddToLog('  TBusinessCentral.Create');
-      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+  try
+    if (ConnectToDB) then
+    begin
+      AddToLog('  TBusinessCentralSetup.Create');
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+        LF_BC_Version);
       try
-        if (NOT(tnMain.Active)) then
-          tnMain.StartTransaction;
+        AddToLog('  TBusinessCentral.Create');
+        lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+        try
+          if (NOT(tnMain.Active)) then
+            tnMain.StartTransaction;
 
-        lDaysToLookAfterRecords := iniFile.ReadInteger('Items', 'Days to look for records', 5);
-        lDepartment := iniFile.ReadString('Items', 'Department', '');
-        // iniFile.WriteDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
-        lDateAndTimeOfLastRun := iniFile.ReadDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
-        lFromDateAndTime := lDateAndTimeOfLastRun;
-        lToDateAndTime := NOW;
+          lDaysToLookAfterRecords := iniFile.ReadInteger('Items', 'Days to look for records', 5);
+          lDepartment := iniFile.ReadString('Items', 'Department', '');
+          // iniFile.WriteDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
+          lDateAndTimeOfLastRun := iniFile.ReadDateTime('Items', 'Last run', NOW - lDaysToLookAfterRecords);
+          lFromDateAndTime := lDateAndTimeOfLastRun;
+          lToDateAndTime := NOW;
 
-        AddToLog(Format('  Department: %s ', [lDepartment]));
-        AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+          AddToLog(Format('  Department: %s ', [lDepartment]));
+          AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
-        QFetchItems.SQL.Clear;
+          QFetchItems.SQL.Clear;
 {$IFDEF RELEASE}
-        QFetchItems.SQL.Add(
-          'SELECT DISTINCT ' +
-          '    v.VARENAVN1 AS Beskrivelse, ' +
-          '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' +
-          '    l.V509INDEX AS LeverandorKode, ' +
-          '    t.VAREFRVSTRNR AS VareID, ' +
-          '    v.MODEL AS Model, ' +
-          '    vg.V509INDEX AS Varegruppe, ' +
-          '    vfsd.SALGSPRISSTK AS Salgspris, ' +
-          '    vv.FARVE_NAVN AS Farve, ' +
-          '    vv.STOERRELSE_NAVN AS Storrelse, ' +
-          '    vv.LAENGDE_NAVN AS Laengde, ' +
-          '    vv.V509INDEX AS VariantID, ' +
-          '    v.KATEGORI1 AS Country, ' +
-          '    v.KATEGORI2 AS Weigth, ' +
-          '    v.INTRASTAT ' +
-          'FROM transaktioner t ' +
-          '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' +
-          '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
-          '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' +
-          '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
-          '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
-          '          vfsd.afdeling_ID = :PAfdeling_ID) ' +
-          '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
-          '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' +
-          '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
-          '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
-          '          vv.EKSPORTERET = 0) ' +
-          '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' +
-          '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' +
-          'WHERE ' +
-          '    t.dato >= :PStartDato AND ' +
-          '    t.dato <= :PSlutDato AND ' +
-          '    t.ART IN (0, 1, 11, 14) ' +
-          'ORDER BY ' +
-          '    4, ' +
-          '    11 '
-          );
+          QFetchItems.SQL.Add(
+            'SELECT DISTINCT ' + #13#10 +
+            '    /*Hoved varenummer*/ ' + #13#10 +
+            '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
+            '    /*Barcode*/ ' + #13#10 +
+            '    vv.V509INDEX AS VariantID, ' + #13#10 +
+            '    /*Color*/ ' + #13#10 +
+            '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
+            '    /*Size*/ ' + #13#10 +
+            '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
+            '    /*Length*/ ' + #13#10 +
+            '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
+            '    /*EANNumber*/ ' + #13#10 +
+            '    vv.eannummer, ' + #13#10 +
+            '    /*Suppliers item numbmer*/ ' + #13#10 +
+            '    vv.levvarenr, ' + #13#10 +
+            '    /*Items description*/ ' + #13#10 +
+            '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
+            '    /*Description 2*/ ' + #13#10 +
+            '    v.VARENAVN2, ' + #13#10 +
+            '    /*Description 3*/ ' + #13#10 +
+            '    v.VARENAVN3, ' + #13#10 +
+            '    /*Style*/ ' + #13#10 +
+            '    v.MODEL AS Model, ' + #13#10 +
+            '    /*Brand short number*/ ' + #13#10 +
+            '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
+            '    /*Brand*/ ' + #13#10 +
+            '    v.leverid, ' + #13#10 +
+            '    /*Group short number*/ ' + #13#10 +
+            '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
+            '    /*Group*/ ' + #13#10 +
+            '    v.varegrpid, ' + #13#10 +
+            '    /*Country*/ ' + #13#10 +
+            '    v.KATEGORI1 AS Country, ' + #13#10 +
+            '    /*Weigth*/ ' + #13#10 +
+            '    v.KATEGORI2 AS Weigth, ' + #13#10 +
+            '    /*IntraStat value*/ ' + #13#10 +
+            '    v.INTRASTAT, ' + #13#10 +
+            '    /*Cost price from selected department*/ ' + #13#10 +
+            '    (SELECT ' + #13#10 +
+            '         vfsd.VEJETKOSTPRISSTK ' + #13#10 +
+            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
+            '     WHERE ' + #13#10 +
+            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Kostpris, ' + #13#10 +
+            '    /*Sale price from selected department*/ ' + #13#10 +
+            '    (SELECT ' + #13#10 +
+            '         vfsd.SALGSPRISSTK ' + #13#10 +
+            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
+            '     WHERE ' + #13#10 +
+            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Salgspris ' + #13#10 +
+            'FROM transaktioner t ' + #13#10 +
+            '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
+            '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN) ' + #13#10 +
+            '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
+            '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
+            'WHERE ' + #13#10 +
+            '    t.dato >= :PStartDato AND ' + #13#10 +
+            '    t.dato <= :PSlutDato AND ' + #13#10 +
+            '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
+            'ORDER BY ' + #13#10 +
+            '    /*Hoved varenummer*/ ' + #13#10 +
+            '    t.VAREFRVSTRNR, ' + #13#10 +
+            '    /*Barcode*/ ' + #13#10 +
+            '    vv.V509INDEX '
+            );
+          // QFetchItems.SQL.Add(
+          // 'SELECT DISTINCT ' +
+          // '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
+          // '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' + #13#10 +
+          // '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
+          // '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
+          // '    v.MODEL AS Model, ' + #13#10 +
+          // '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
+          // '    vfsd.SALGSPRISSTK AS Salgspris, ' + #13#10 +
+          // '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
+          // '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
+          // '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
+          // '    vv.V509INDEX AS VariantID, ' + #13#10 +
+          // '    v.KATEGORI1 AS Country, ' + #13#10 +
+          // '    v.KATEGORI2 AS Weigth, ' + #13#10 +
+          // '    v.INTRASTAT ' + #13#10 +
+          // 'FROM transaktioner t ' + #13#10 +
+          // '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
+          // '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+          // '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+          // '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+          // '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+          // '          vfsd.afdeling_ID = :PAfdeling_ID) ' + #13#10 +
+          // '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+          // '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+          // '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+          // '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+          // '          vv.EKSPORTERET = 0) ' + #13#10 +
+          // '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
+          // '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
+          // 'WHERE ' + #13#10 +
+          // '    t.dato >= :PStartDato AND ' + #13#10 +
+          // '    t.dato <= :PSlutDato AND ' + #13#10 +
+          // '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
+          // 'ORDER BY ' + #13#10 +
+          // '    4, ' + #13#10 +
+          // '    11 '
+          // );
 {$ENDIF}
 {$IFDEF DEBUG}
-        QFetchItems.SQL.Add(
-          'SELECT DISTINCT ' +
-          '    v.VARENAVN1 AS Beskrivelse, ' +
-          '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' +
-          '    l.V509INDEX AS LeverandorKode, ' +
-          '    t.VAREFRVSTRNR AS VareID, ' +
-          '    v.MODEL AS Model, ' +
-          '    vg.V509INDEX AS Varegruppe, ' +
-          '    vfsd.SALGSPRISSTK AS Salgspris, ' +
-          '    vv.FARVE_NAVN AS Farve, ' +
-          '    vv.STOERRELSE_NAVN AS Storrelse, ' +
-          '    vv.LAENGDE_NAVN AS Laengde, ' +
-          '    vv.V509INDEX AS VariantID, ' +
-          '    v.KATEGORI1 AS Country, ' +
-          '    v.KATEGORI2 AS Weigth, ' +
-          '    v.INTRASTAT ' +
-          'FROM transaktioner t ' +
-          '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' +
-          '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
-          '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' +
-          '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
-          '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
-          '          vfsd.afdeling_ID = :PAfdeling_ID) ' +
-          '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' +
-          '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' +
-          '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' +
-          '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' +
-          '          vv.EKSPORTERET >= 0) ' +
-          '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' +
-          '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' +
-          'WHERE ' +
-          '    t.dato >= :PStartDato AND ' +
-          '    t.dato <= :PSlutDato AND ' +
-          '    t.ART IN (0, 1, 11, 14) ' +
-          '    and Upper(LevNavn)=Upper(''Hugo Boss'') ' +
-          'ORDER BY ' +
-          '    4, ' +
-          '    11 '
-          );
+          (*
+            Here we will fetch all items which has ben sold, regulated or moved within a given date interval.
+            We will fetch cost- and sales prices from a department selected by user
+
+            This will not take into account if item has been exported.
+            It will just export items touched regarding stock.
+
+            We will also need to select items which has been touch in any other way (edited fields of importance)
+
+            SNSE THIS IS DEBUG - WE ONLY FETCH FOR SUPPLIER (BRAND) ALLAN & CLARKE
+          *)
+          QFetchItems.SQL.Add(
+            'SELECT DISTINCT ' + #13#10 +
+            '    /*Hoved varenummer*/ ' + #13#10 +
+            '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
+            '    /*Barcode*/ ' + #13#10 +
+            '    vv.V509INDEX AS VariantID, ' + #13#10 +
+            '    /*Color*/ ' + #13#10 +
+            '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
+            '    /*Size*/ ' + #13#10 +
+            '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
+            '    /*Length*/ ' + #13#10 +
+            '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
+            '    /*EANNumber*/ ' + #13#10 +
+            '    vv.eannummer, ' + #13#10 +
+            '    /*Suppliers item numbmer*/ ' + #13#10 +
+            '    vv.levvarenr, ' + #13#10 +
+            '    /*Items description*/ ' + #13#10 +
+            '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
+            '    /*Description 2*/ ' + #13#10 +
+            '    v.VARENAVN2, ' + #13#10 +
+            '    /*Description 3*/ ' + #13#10 +
+            '    v.VARENAVN3, ' + #13#10 +
+            '    /*Style*/ ' + #13#10 +
+            '    v.MODEL AS Model, ' + #13#10 +
+            '    /*Brand short number*/ ' + #13#10 +
+            '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
+            '    /*Brand*/ ' + #13#10 +
+            '    v.leverid, ' + #13#10 +
+            '    /*Group short number*/ ' + #13#10 +
+            '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
+            '    /*Group*/ ' + #13#10 +
+            '    v.varegrpid, ' + #13#10 +
+            '    /*Country*/ ' + #13#10 +
+            '    v.KATEGORI1 AS Country, ' + #13#10 +
+            '    /*Weigth*/ ' + #13#10 +
+            '    v.KATEGORI2 AS Weigth, ' + #13#10 +
+            '    /*IntraStat value*/ ' + #13#10 +
+            '    v.INTRASTAT, ' + #13#10 +
+            '    /*Cost price from selected department*/ ' + #13#10 +
+            '    (SELECT ' + #13#10 +
+            '         vfsd.VEJETKOSTPRISSTK ' + #13#10 +
+            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
+            '     WHERE ' + #13#10 +
+            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Kostpris, ' + #13#10 +
+            '    /*Sale price from selected department*/ ' + #13#10 +
+            '    (SELECT ' + #13#10 +
+            '         vfsd.SALGSPRISSTK ' + #13#10 +
+            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
+            '     WHERE ' + #13#10 +
+            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
+            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Salgspris ' + #13#10 +
+            'FROM transaktioner t ' + #13#10 +
+            // '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) and (v.leverid=:PLever) ' + #13#10 +
+            '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
+            '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
+            '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
+            '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
+            '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN) ' + #13#10 +
+            '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
+            '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
+            'WHERE ' + #13#10 +
+            '    t.dato >= :PStartDato AND ' + #13#10 +
+            '    t.dato <= :PSlutDato AND ' + #13#10 +
+            // '    t.levnavn =:PLever AND ' + #13#10 +
+            '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
+            'ORDER BY ' + #13#10 +
+            '    /*Hoved varenummer*/ ' + #13#10 +
+            '    t.VAREFRVSTRNR, ' + #13#10 +
+            '    /*Barcode*/ ' + #13#10 +
+            '    vv.V509INDEX '
+            );
+          lToDateAndTime := NOW;
 {$ENDIF}
-        QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
-        QFetchItems.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
-        QFetchItems.ParamByName('PAfdeling_ID').AsString := lDepartment;
-        QFetchItems.SQL.SaveToFile(SQLLogFileFolder + 'Items.SQL');
-        QFetchItems.Open;
-        QFetchItems.FetchAll;
+          QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
+          QFetchItems.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
+          QFetchItems.ParamByName('PAfdeling_ID').AsString := lDepartment;
+          // {$IFDEF DEBUG}
+          // QFetchItems.ParamByName('PLever').AsString := 'ALLAN&CLARK';
+          // {$ENDIF}
+          QFetchItems.SQL.SaveToFile(SQLLogFileFolder + 'Items.SQL');
+          QFetchItems.Open;
+          QFetchItems.FetchAll;
 
-        AddToLog(Format('  Items fetched: %d', [QFetchItems.RecordCount]));
+          AddToLog(Format('  Items fetched: %d', [QFetchItems.RecordCount]));
 
-        lExportCounterHeadItems := 0;
-        lExportCounterVariants := 0;
-        lErrorCounter := 0;
-        lCurrentHeadItem := '';
-        ContinueWithVariants := TRUE;
+          lExportCounterHeadItems := 0;
+          lExportCounterHeadItemVariants := 0;
+          lExportCounterVariants := 0;
+          lErrorCounter := 0;
+          lCurrentHeadItem := '';
+          ContinueWithVariants := TRUE;
 
-        if (NOT(QFetchItems.EOF)) then
-        begin
-          // At least 1 record is there - fetch next transactions UD
-          BC_ItemsTransactionID := FetchNextTransID('head items');
-          BC_VariantsTransactionID := FetchNextTransID('variants');
-          // Iterate through result set
-          while (NOT(QFetchItems.EOF)) do
+          if (NOT(QFetchItems.EOF)) then
           begin
-            CreateAndExportItems;
-            QFetchItems.Next;
+            // At least 1 record is there - fetch next transactions UD
+            BC_ItemsTransactionID := FetchNextTransID('head items');
+            BC_VariantsTransactionID := FetchNextTransID('variants');
+            // Iterate through result set
+            while (NOT(QFetchItems.EOF)) do
+            begin
+              CreateAndExportItems;
+              QFetchItems.Next;
+            end;
+            AddToLog('  Iteration done');
+            AddToLog(Format('  Exported %d head items, %d head item variants and %d variants', [lExportCounterHeadItems, lExportCounterHeadItemVariants, lExportCounterVariants]));
+            AddToLog('  Routine done');
+            iniFile.WriteDateTime('Items', 'Last time sync to BC was tried', NOW);
+            if lErrorCounter = 0 then
+            begin
+              // Only save time if there is no errors
+              iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
+            end;
+          end
+          else
+          begin
+            // NO records selected
+            AddToLog('  No records');
           end;
-          AddToLog('  Iteration done');
-          AddToLog(Format('  Exported %d head items and %d variants', [lExportCounterHeadItems, lExportCounterVariants]));
-          AddToLog('  Routine done');
-          iniFile.WriteDateTime('Items', 'Last time sync to BC was tried', NOW);
-          if lErrorCounter = 0 then
+
+          QFetchItems.Close;
+          if (tnMain.Active) then
+            tnMain.Commit;
+
+          if (lErrorCounter > 0) then
           begin
-            // Only save time if there is no errors
+            // Some error occured. Send an mail to user
+            // Send mail with file LogFolder + lErrorName
+            // Rename file
+            lText := 'Der skete en fejl ved synkronisering af varer til Business Central.' + #13#10 +
+              'Vedhæftet er en fil med information' + #13#10;
+            SendErrorMail(LogFileFolder + lErrorFileName, 'Varer', lText);
+            // Rename error file
+            TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+            InsertTracingLog(2, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
+          end
+          else
+          begin
+            // save last time items was checked
             iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
+            InsertTracingLog(1, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
           end;
-        end
-        else
-        begin
-          // NO records selected
-          AddToLog('  No records');
-        end;
-
-        QFetchItems.Close;
-        if (tnMain.Active) then
-          tnMain.Commit;
-
-        if (lErrorCounter > 0) then
-        begin
-          // Some error occured. Send an mail to user
-          // Send mail with file LogFolder + lErrorName
-          // Rename file
-          lText := 'Der skete en fejl ved synkronisering af varer til Business Central.' + #13#10 +
-            'Vedhæftet er en fil med information' + #13#10;
-          SendErrorMail(LogFileFolder + lErrorFileName, 'Varer', lText);
-          // Rename error file
-          TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
-          InsertTracingLog(2, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
-        end
-        else
-        begin
-          // save last time items was checked
-          iniFile.WriteDateTime('Items', 'Last run', lToDateAndTime);
-          InsertTracingLog(1, lFromDateAndTime, lToDateAndTime, BC_ItemsTransactionID);
+        finally
+          AddToLog('  TBusinessCentral - Free');
+          FReeAndNil(lBusinessCentral);
         end;
       finally
-        AddToLog('  TBusinessCentral - Free');
-        FReeAndNil(lBusinessCentral);
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
       end;
-    finally
-      AddToLog('  TBusinessCentralSetup - Free');
-      FReeAndNil(lBusinessCentralSetup);
-    end;
 
-    DisconnectFromDB;
+      DisconnectFromDB;
+    end;
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('DoSyncronizeItems - ERROR. %s', [E.Message]));
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
   end;
   AddToLog('DoSyncronizeItems - END');
   AddToLog('  ');
@@ -2313,8 +2557,13 @@ begin
       end;
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
-
   except
+    on E: Exception do
+    begin
+      AddToLog(Format('ERROR. %s', [E.Message]));
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
   end;
 end;
 

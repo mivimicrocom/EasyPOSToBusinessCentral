@@ -4,7 +4,7 @@ object frmMain: TfrmMain
   Caption = 
     'Indstillinger til windows serviceprogram (EasyPOS to Business Ce' +
     'ntral)'
-  ClientHeight = 662
+  ClientHeight = 715
   ClientWidth = 1371
   Color = clBtnFace
   Constraints.MinHeight = 480
@@ -23,15 +23,17 @@ object frmMain: TfrmMain
     Left = 0
     Top = 0
     Width = 1371
-    Height = 662
+    Height = 715
     Hint = ''
-    ActivePage = tsProgram
+    ActivePage = TabSheet1
     Align = alClient
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 0
+    ExplicitHeight = 662
     FixedDimension = 21
     object tsProgram: TRzTabSheet
       Caption = 'Program'
+      ExplicitHeight = 637
       object Label1: TRzLabel
         Left = 16
         Top = 28
@@ -95,7 +97,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         PasswordChar = '*'
-        TabOrder = 0
+        TabOrder = 5
       end
       object edDepartment: TRzEdit
         Left = 16
@@ -103,7 +105,7 @@ object frmMain: TfrmMain
         Width = 200
         Height = 23
         Text = ''
-        TabOrder = 1
+        TabOrder = 6
       end
       object edMachine: TRzEdit
         Left = 16
@@ -111,7 +113,7 @@ object frmMain: TfrmMain
         Width = 200
         Height = 23
         Text = ''
-        TabOrder = 2
+        TabOrder = 7
       end
       object edTimer: TRzNumericEdit
         Left = 16
@@ -119,7 +121,7 @@ object frmMain: TfrmMain
         Width = 65
         Height = 23
         Hint = 'Enter minutes between service will check and do export'
-        TabOrder = 3
+        TabOrder = 0
         DisplayFormat = ',0;(,0)'
       end
       object edLogFolder: TRzEdit
@@ -128,7 +130,7 @@ object frmMain: TfrmMain
         Width = 665
         Height = 23
         Text = ''
-        TabOrder = 4
+        TabOrder = 2
       end
       object edDatabase: TRzEdit
         Left = 16
@@ -136,7 +138,7 @@ object frmMain: TfrmMain
         Width = 665
         Height = 23
         Text = ''
-        TabOrder = 5
+        TabOrder = 3
       end
       object edUser: TRzEdit
         Left = 16
@@ -144,7 +146,7 @@ object frmMain: TfrmMain
         Width = 200
         Height = 23
         Text = ''
-        TabOrder = 6
+        TabOrder = 4
       end
       object cbOnlyTest: TRzCheckBox
         Left = 16
@@ -155,14 +157,15 @@ object frmMain: TfrmMain
           'Only run as test (noting will be syncronized to Business Central' +
           ')'
         State = cbUnchecked
-        TabOrder = 7
+        TabOrder = 8
       end
       object btnSelectFolder: TRzBitBtn
         Left = 696
         Top = 122
         Width = 25
         Caption = '*'
-        TabOrder = 8
+        TabOrder = 9
+        TabStop = False
         OnClick = btnSelectFolderClick
       end
       object cbHvertMinut: TCheckBox
@@ -171,11 +174,12 @@ object frmMain: TfrmMain
         Width = 230
         Height = 17
         Caption = 'K'#248'r i stedet hvert angivet minut'
-        TabOrder = 9
+        TabOrder = 1
       end
     end
     object TabSheet1: TRzTabSheet
       Caption = 'Business Central'
+      ExplicitHeight = 637
       object RzLabel3: TRzLabel
         Left = 24
         Top = 15
@@ -186,9 +190,9 @@ object frmMain: TfrmMain
       object RzLabel4: TRzLabel
         Left = 24
         Top = 85
-        Width = 22
+        Width = 97
         Height = 15
-        Caption = 'Port'
+        Caption = 'Port (0 is disabled)'
       end
       object RzLabel5: TRzLabel
         Left = 24
@@ -278,6 +282,7 @@ object frmMain: TfrmMain
     end
     object TabSheet2: TRzTabSheet
       Caption = 'Mail'
+      ExplicitHeight = 637
       object RzLabel12: TRzLabel
         Left = 32
         Top = 23
@@ -431,8 +436,8 @@ object frmMain: TfrmMain
       object cbUseTLS: TRzCheckBox
         Left = 120
         Top = 475
-        Width = 59
-        Height = 17
+        Width = 63
+        Height = 19
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -440,11 +445,12 @@ object frmMain: TfrmMain
     end
     object TabSheet3: TRzTabSheet
       Caption = 'Syncronize'
+      ExplicitHeight = 637
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 108
-        Height = 17
+        Width = 112
+        Height = 19
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -452,8 +458,8 @@ object frmMain: TfrmMain
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
         Top = 74
-        Width = 166
-        Height = 17
+        Width = 170
+        Height = 19
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -461,8 +467,8 @@ object frmMain: TfrmMain
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
         Top = 116
-        Width = 171
-        Height = 17
+        Width = 175
+        Height = 19
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -470,8 +476,8 @@ object frmMain: TfrmMain
       object cbSyncMovements: TRzCheckBox
         Left = 16
         Top = 158
-        Width = 204
-        Height = 17
+        Width = 208
+        Height = 19
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -479,8 +485,8 @@ object frmMain: TfrmMain
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
         Top = 200
-        Width = 231
-        Height = 17
+        Width = 235
+        Height = 19
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -488,6 +494,7 @@ object frmMain: TfrmMain
     end
     object tsItems: TRzTabSheet
       Caption = 'Items'
+      ExplicitHeight = 637
       object RzLabel22: TRzLabel
         Left = 24
         Top = 34
@@ -558,6 +565,7 @@ object frmMain: TfrmMain
     end
     object TabSheet4: TRzTabSheet
       Caption = 'Financial records'
+      ExplicitHeight = 637
       object RzLabel26: TRzLabel
         Left = 32
         Top = 42
@@ -612,6 +620,7 @@ object frmMain: TfrmMain
     end
     object TabSheet7: TRzTabSheet
       Caption = 'Sales transaction'
+      ExplicitHeight = 637
       object RzLabel32: TRzLabel
         Left = 32
         Top = 42
@@ -637,6 +646,7 @@ object frmMain: TfrmMain
       end
       object RzTabSheet1: TRzTabSheet
         Caption = 'Financial records'
+        ExplicitHeight = 637
         object RzLabel28: TRzLabel
           Left = 32
           Top = 42
@@ -720,6 +730,7 @@ object frmMain: TfrmMain
     end
     object TabSheet8: TRzTabSheet
       Caption = 'Movements transactions'
+      ExplicitHeight = 637
       object RzLabel35: TRzLabel
         Left = 32
         Top = 42
@@ -774,6 +785,7 @@ object frmMain: TfrmMain
     end
     object TabSheet9: TRzTabSheet
       Caption = 'Stock regulation transations'
+      ExplicitHeight = 637
       object RzLabel38: TRzLabel
         Left = 32
         Top = 42
@@ -829,67 +841,76 @@ object frmMain: TfrmMain
     object tsGeneralLog: TRzTabSheet
       OnShow = tsGeneralLogShow
       Caption = 'Programlog'
+      ExplicitHeight = 637
       object mmoLog: TRzMemo
         Left = 217
         Top = 0
         Width = 1150
-        Height = 637
+        Height = 690
         Align = alClient
         TabOrder = 0
+        ExplicitHeight = 637
       end
       object lbLogFiles: TRzListBox
         Left = 0
         Top = 0
         Width = 217
-        Height = 637
+        Height = 690
         Align = alLeft
         ItemHeight = 15
         TabOrder = 1
         OnClick = lbLogFilesClick
+        ExplicitHeight = 637
       end
     end
     object TabSheet5: TRzTabSheet
       OnShow = TabSheet5Show
       Caption = 'Business Central Log'
+      ExplicitHeight = 637
       object lbBCLogFiles: TRzListBox
         Left = 0
         Top = 0
         Width = 297
-        Height = 637
+        Height = 690
         Align = alLeft
         ItemHeight = 15
         TabOrder = 0
         OnClick = lbBCLogFilesClick
+        ExplicitHeight = 637
       end
       object mmoBCLogs: TRzMemo
         Left = 297
         Top = 0
         Width = 1070
-        Height = 637
+        Height = 690
         Align = alClient
         TabOrder = 1
+        ExplicitHeight = 637
       end
     end
     object TabSheet6: TRzTabSheet
       OnShow = TabSheet6Show
       Caption = 'Finanseksportlog'
+      ExplicitHeight = 637
       object lbFinansLogFiles: TRzListBox
         Left = 0
         Top = 0
         Width = 297
-        Height = 637
+        Height = 690
         Align = alLeft
         ItemHeight = 15
         TabOrder = 0
         OnClick = lbFinansLogFilesClick
+        ExplicitHeight = 637
       end
       object mmoFinansLog: TRzMemo
         Left = 297
         Top = 0
         Width = 1070
-        Height = 637
+        Height = 690
         Align = alClient
         TabOrder = 1
+        ExplicitHeight = 637
       end
     end
   end
