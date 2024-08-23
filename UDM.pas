@@ -87,7 +87,8 @@ type
     OnlyTestRoutine: Boolean;
 
     LF_BC_BASEURL: String;
-    LF_BC_PORT: Integer;
+    LF_BC_PORT_Int: Integer;
+    LF_BC_PORT_Str: String;
     LF_BC_COMPANY_URL: String;
     LF_BC_USERNAME: String;
     LF_BC_PASSWORD: String;
@@ -489,7 +490,10 @@ begin
   AddToLog('  Fetching Business Central settings from INI file');
 
   LF_BC_BASEURL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_BASEURL', '');
-  LF_BC_PORT := iniFile.ReadInteger('BUSINESS CENTRAL', 'BC_PORT', 0);
+  LF_BC_PORT_Int := iniFile.ReadInteger('BUSINESS CENTRAL', 'BC_PORT', 0);
+  LF_BC_PORT_Str := LF_BC_PORT_Int.ToString;
+  if LF_BC_PORT_Str = '0' then
+    LF_BC_PORT_Str := '';
   LF_BC_COMPANY_URL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_COMPANY_URL', '');
   LF_BC_Environment := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ENVIRONMENT', '');
   LF_BC_USERNAME := iniFile.ReadString('BUSINESS CENTRAL', 'BC_USERNAME', '');
@@ -506,7 +510,7 @@ begin
   end;
 
   if (LF_BC_BASEURL = '') AND
-    (LF_BC_PORT = 0) AND
+    (LF_BC_PORT_Int = 0) AND
     (LF_BC_COMPANY_URL = '') AND
     (LF_BC_USERNAME = '') AND
     (LF_BC_PASSWORD = '') AND
@@ -527,7 +531,10 @@ begin
     QFinansTemp.ParamByName('PNavn').AsString := EasyPOS_Machine;
     QFinansTemp.Open;
     LF_BC_BASEURL := QFinansTemp.FieldByName('BC_BASEURL').AsString;
-    LF_BC_PORT := QFinansTemp.FieldByName('BC_PORT').AsInteger;
+    LF_BC_PORT_Int := QFinansTemp.FieldByName('BC_PORT').AsInteger;
+    LF_BC_PORT_Str := LF_BC_PORT_Int.ToString;
+    if LF_BC_PORT_Str = '0' then
+      LF_BC_PORT_Str := '';
     LF_BC_COMPANY_URL := QFinansTemp.FieldByName('BC_COMPANY_URL').AsString;
     LF_BC_USERNAME := QFinansTemp.FieldByName('BC_USERNAME').AsString;
     LF_BC_PASSWORD := QFinansTemp.FieldByName('BC_PASSWORD').AsString;
@@ -536,7 +543,7 @@ begin
   end;
 
   AddToLog('  LF_BC_BASEURL: ' + LF_BC_BASEURL);
-  AddToLog('  LF_BC_PORT: ' + LF_BC_PORT.ToString);
+  AddToLog('  LF_BC_PORT: ' + LF_BC_PORT_Str);
   AddToLog('  LF_BC_COMPANY_URL: ' + LF_BC_COMPANY_URL);
   AddToLog('  LF_BC_Environment: ' + LF_BC_Environment);
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
@@ -965,7 +972,7 @@ begin
   begin
     AddToLog('  TBusinessCentralSetup.Create');
     lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT.ToString,
+      LF_BC_PORT_Str,
       LF_BC_COMPANY_URL,
       LF_BC_ACTIVECOMPANYID,
       LF_BC_Environment,
@@ -1380,7 +1387,7 @@ begin
     begin
       AddToLog('  TBusinessCentralSetup.Create');
       lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-        LF_BC_PORT.ToString,
+        LF_BC_PORT_Str,
         LF_BC_COMPANY_URL,
         LF_BC_ACTIVECOMPANYID,
         LF_BC_Environment,
@@ -1388,6 +1395,7 @@ begin
         LF_BC_PASSWORD,
         LF_BC_Version);
       try
+        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL]));
         AddToLog('  TBusinessCentral.Create');
         lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
         try
@@ -1530,8 +1538,6 @@ begin
             It will just export items touched regarding stock.
 
             We will also need to select items which has been touch in any other way (edited fields of importance)
-
-            SNSE THIS IS DEBUG - WE ONLY FETCH FOR SUPPLIER (BRAND) ALLAN & CLARKE
           *)
           QFetchItems.SQL.Add(
             'SELECT DISTINCT ' + #13#10 +
@@ -1592,7 +1598,6 @@ begin
             '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
             '         vfsd.afdeling_ID = :PAfdeling_ID) AS Salgspris ' + #13#10 +
             'FROM transaktioner t ' + #13#10 +
-            // '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) and (v.leverid=:PLever) ' + #13#10 +
             '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
             '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
             '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
@@ -1603,7 +1608,6 @@ begin
             'WHERE ' + #13#10 +
             '    t.dato >= :PStartDato AND ' + #13#10 +
             '    t.dato <= :PSlutDato AND ' + #13#10 +
-            // '    t.levnavn =:PLever AND ' + #13#10 +
             '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
             'ORDER BY ' + #13#10 +
             '    /*Hoved varenummer*/ ' + #13#10 +
@@ -1884,7 +1888,7 @@ begin
   begin
     AddToLog('  TBusinessCentralSetup.Create');
     lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT.ToString,
+      LF_BC_PORT_Str,
       LF_BC_COMPANY_URL,
       LF_BC_ACTIVECOMPANYID,
       LF_BC_Environment,
@@ -2154,7 +2158,7 @@ begin
   begin
     AddToLog('  TBusinessCentralSetup.Create');
     lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT.ToString,
+      LF_BC_PORT_Str,
       LF_BC_COMPANY_URL,
       LF_BC_ACTIVECOMPANYID,
       LF_BC_Environment,
@@ -2441,7 +2445,7 @@ begin
   begin
     AddToLog('  TBusinessCentralSetup.Create');
     lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT.ToString,
+      LF_BC_PORT_Str,
       LF_BC_COMPANY_URL,
       LF_BC_ACTIVECOMPANYID,
       LF_BC_Environment,
