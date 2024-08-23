@@ -143,6 +143,8 @@ type
     cbSyncStockRegulations: TRzCheckBox;
     cbOnlineBusinessCentral: TCheckBox;
     cbHvertMinut: TCheckBox;
+    edEnvironment: TRzEdit;
+    RzLabel41: TRzLabel;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -202,6 +204,7 @@ begin
   edBCActiveCompany.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
   edBCPOrt.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_PORT', '');
   cbOnlineBusinessCentral.Checked := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
+  edEnvironment.Text := FiniFile.ReadString('BUSINESS CENTRAL', 'BC_ENVIRONMENT', '');
 
   edMailSenderName.Text := FiniFile.ReadString('MAIL', 'From name', '');
   edMailSenderMail.Text := FiniFile.ReadString('MAIL', 'From mail', '');
@@ -356,6 +359,7 @@ begin
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_USERNAME', edBCUser.Text);
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_PASSWORD', edBCPassword.Text);
   FiniFile.WriteString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', edBCActiveCompany.Text);
+  FiniFile.WriteString('BUSINESS CENTRAL', 'BC_ENVIRONMENT', edEnvironment.Text);
   FiniFile.WriteInteger('BUSINESS CENTRAL', 'BC_PORT', edBCPOrt.IntValue);
   FiniFile.WriteBool('BUSINESS CENTRAL', 'Online Business Central', cbOnlineBusinessCentral.Checked);
 

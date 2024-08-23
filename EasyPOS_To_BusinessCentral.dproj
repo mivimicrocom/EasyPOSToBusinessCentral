@@ -98,8 +98,8 @@
         <VerInfo_Release>125</VerInfo_Release>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <VerInfo_Build>53</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=Microcom A/S;FileDescription=$(MSBuildProjectName);FileVersion=1.2024.125.53;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Build>59</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=Microcom A/S;FileDescription=$(MSBuildProjectName);FileVersion=1.2024.125.59;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <DCC_DebugInformation>2</DCC_DebugInformation>
         <DCC_SymbolReferenceInfo>2</DCC_SymbolReferenceInfo>
         <DCC_MapFile>3</DCC_MapFile>
@@ -121,11 +121,11 @@
         <DCCReference Include="uMain.pas">
             <Form>frmMain</Form>
         </DCCReference>
-        <DCCReference Include="AfsendMail\uSendEMail.pas"/>
         <DCCReference Include="BusinessCentral-Integration\uBusinessCentralIntegration.pas"/>
         <DCCReference Include="BusinessCentral-Integration\USelectCompany.pas">
             <Form>frmSelectCompany</Form>
         </DCCReference>
+        <DCCReference Include="AfsendMail\uSendEMail.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -156,6 +156,18 @@
             <Deployment Version="4">
                 <DeployFile LocalName="Win32\Appmode\EasyPOS_To_BusinessCentral.exe" Configuration="Appmode" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Debug\EasyPOS_To_BusinessCentral.exe" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win32\Debug\EasyPOS_To_BusinessCentral.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>EasyPOS_To_BusinessCentral.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win32\Release\EasyPOS_To_BusinessCentral.exe" Configuration="Release" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>EasyPOS_To_BusinessCentral.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>

@@ -92,6 +92,7 @@ type
     LF_BC_USERNAME: String;
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
+    LF_BC_Environment: string;
     LF_BC_Online: Boolean;
     LF_BC_Version: Integer; // 0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication
 
@@ -127,12 +128,12 @@ implementation
 
 uses
   System.IOUtils,
-  uSendEMail,
   MVCFramework,
   MVCFramework.Serializer.Defaults,
   MVCFramework.Serializer.Commons,
   MVCFramework.Serializer.JsonDataObjects,
-  uBusinessCentralIntegration;
+  uBusinessCentralIntegration,
+  uSendEMail;
 
 const
   NumberOfDays = 21;
@@ -490,6 +491,7 @@ begin
   LF_BC_BASEURL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_BASEURL', '');
   LF_BC_PORT := iniFile.ReadInteger('BUSINESS CENTRAL', 'BC_PORT', 0);
   LF_BC_COMPANY_URL := iniFile.ReadString('BUSINESS CENTRAL', 'BC_COMPANY_URL', '');
+  LF_BC_Environment := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ENVIRONMENT', '');
   LF_BC_USERNAME := iniFile.ReadString('BUSINESS CENTRAL', 'BC_USERNAME', '');
   LF_BC_PASSWORD := iniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
   LF_BC_ACTIVECOMPANYID := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
@@ -536,6 +538,7 @@ begin
   AddToLog('  LF_BC_BASEURL: ' + LF_BC_BASEURL);
   AddToLog('  LF_BC_PORT: ' + LF_BC_PORT.ToString);
   AddToLog('  LF_BC_COMPANY_URL: ' + LF_BC_COMPANY_URL);
+  AddToLog('  LF_BC_Environment: ' + LF_BC_Environment);
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
   AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
@@ -961,7 +964,13 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+      LF_BC_PORT.ToString,
+      LF_BC_COMPANY_URL,
+      LF_BC_ACTIVECOMPANYID,
+      LF_BC_Environment,
+      LF_BC_USERNAME,
+      LF_BC_PASSWORD,
       LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
@@ -1370,7 +1379,13 @@ begin
     if (ConnectToDB) then
     begin
       AddToLog('  TBusinessCentralSetup.Create');
-      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+        LF_BC_PORT.ToString,
+        LF_BC_COMPANY_URL,
+        LF_BC_ACTIVECOMPANYID,
+        LF_BC_Environment,
+        LF_BC_USERNAME,
+        LF_BC_PASSWORD,
         LF_BC_Version);
       try
         AddToLog('  TBusinessCentral.Create');
@@ -1868,7 +1883,13 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+      LF_BC_PORT.ToString,
+      LF_BC_COMPANY_URL,
+      LF_BC_ACTIVECOMPANYID,
+      LF_BC_Environment,
+      LF_BC_USERNAME,
+      LF_BC_PASSWORD,
       LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
@@ -2132,7 +2153,13 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+      LF_BC_PORT.ToString,
+      LF_BC_COMPANY_URL,
+      LF_BC_ACTIVECOMPANYID,
+      LF_BC_Environment,
+      LF_BC_USERNAME,
+      LF_BC_PASSWORD,
       LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');
@@ -2413,7 +2440,13 @@ begin
   if (ConnectToDB) then
   begin
     AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL, LF_BC_PORT.ToString, LF_BC_COMPANY_URL, LF_BC_ACTIVECOMPANYID, LF_BC_USERNAME, LF_BC_PASSWORD,
+    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+      LF_BC_PORT.ToString,
+      LF_BC_COMPANY_URL,
+      LF_BC_ACTIVECOMPANYID,
+      LF_BC_Environment,
+      LF_BC_USERNAME,
+      LF_BC_PASSWORD,
       LF_BC_Version);
     try
       AddToLog('  TBusinessCentral.Create');

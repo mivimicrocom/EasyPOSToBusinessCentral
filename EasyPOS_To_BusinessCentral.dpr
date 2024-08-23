@@ -1,10 +1,8 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-//  FastMM4,
   {$IFNDEF RELEASE}
   forms,
-  System.SysUtils,
   {$ELSE}
   Vcl.SvcMgr,
   {$ENDIF }
@@ -13,9 +11,9 @@ uses
   {$IFNDEF RELEASE}
   uMain in 'uMain.pas' {frmMain},
   {$ENDIF }
-  uSendEMail in 'AfsendMail\uSendEMail.pas',
   uBusinessCentralIntegration in 'BusinessCentral-Integration\uBusinessCentralIntegration.pas',
-  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany};
+  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany},
+  uSendEMail in 'AfsendMail\uSendEMail.pas';
 
 {$R *.RES}
 
@@ -44,7 +42,7 @@ begin
     Application.Initialize;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
-{$ENDIF}
+  {$ENDIF}
   Application.Run;
 
 end.

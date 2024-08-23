@@ -25,15 +25,13 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = TabSheet1
+    ActivePage = tsProgram
     Align = alClient
-    TabIndex = 1
+    TabIndex = 0
     TabOrder = 0
-    ExplicitHeight = 662
     FixedDimension = 21
     object tsProgram: TRzTabSheet
       Caption = 'Program'
-      ExplicitHeight = 637
       object Label1: TRzLabel
         Left = 16
         Top = 28
@@ -179,7 +177,6 @@ object frmMain: TfrmMain
     end
     object TabSheet1: TRzTabSheet
       Caption = 'Business Central'
-      ExplicitHeight = 637
       object RzLabel3: TRzLabel
         Left = 24
         Top = 15
@@ -203,24 +200,31 @@ object frmMain: TfrmMain
       end
       object RzLabel9: TRzLabel
         Left = 24
-        Top = 227
+        Top = 290
         Width = 109
         Height = 15
         Caption = 'Username / Client ID'
       end
       object RzLabel10: TRzLabel
         Left = 24
-        Top = 297
+        Top = 360
         Width = 145
         Height = 15
         Caption = 'Password / Client Password'
       end
       object RzLabel11: TRzLabel
         Left = 24
-        Top = 368
+        Top = 431
         Width = 88
         Height = 15
         Caption = 'Active Company'
+      end
+      object RzLabel41: TRzLabel
+        Left = 24
+        Top = 221
+        Width = 68
+        Height = 15
+        Caption = 'Environment'
       end
       object edBCBaseURL: TRzEdit
         Left = 24
@@ -232,7 +236,7 @@ object frmMain: TfrmMain
       end
       object edBCPOrt: TRzNumericEdit
         Left = 24
-        Top = 104
+        Top = 103
         Width = 65
         Height = 23
         TabOrder = 1
@@ -241,7 +245,7 @@ object frmMain: TfrmMain
       end
       object edBCCompanyURL: TRzEdit
         Left = 24
-        Top = 175
+        Top = 171
         Width = 665
         Height = 23
         Text = ''
@@ -249,40 +253,47 @@ object frmMain: TfrmMain
       end
       object edBCUser: TRzEdit
         Left = 24
-        Top = 246
-        Width = 665
-        Height = 23
-        Text = ''
-        TabOrder = 3
-      end
-      object edBCPassword: TRzEdit
-        Left = 24
-        Top = 316
+        Top = 307
         Width = 665
         Height = 23
         Text = ''
         TabOrder = 4
       end
-      object edBCActiveCompany: TRzEdit
+      object edBCPassword: TRzEdit
         Left = 24
-        Top = 387
+        Top = 375
         Width = 665
         Height = 23
         Text = ''
         TabOrder = 5
       end
+      object edBCActiveCompany: TRzEdit
+        Left = 24
+        Top = 449
+        Width = 665
+        Height = 23
+        Text = ''
+        TabOrder = 6
+      end
       object cbOnlineBusinessCentral: TCheckBox
         Left = 24
-        Top = 448
+        Top = 511
         Width = 345
         Height = 17
         Caption = 'Online Business Central med OAuth2 authentication'
-        TabOrder = 6
+        TabOrder = 7
+      end
+      object edEnvironment: TRzEdit
+        Left = 24
+        Top = 239
+        Width = 665
+        Height = 23
+        Text = ''
+        TabOrder = 3
       end
     end
     object TabSheet2: TRzTabSheet
       Caption = 'Mail'
-      ExplicitHeight = 637
       object RzLabel12: TRzLabel
         Left = 32
         Top = 23
@@ -436,8 +447,8 @@ object frmMain: TfrmMain
       object cbUseTLS: TRzCheckBox
         Left = 120
         Top = 475
-        Width = 63
-        Height = 19
+        Width = 59
+        Height = 17
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -445,12 +456,11 @@ object frmMain: TfrmMain
     end
     object TabSheet3: TRzTabSheet
       Caption = 'Syncronize'
-      ExplicitHeight = 637
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 112
-        Height = 19
+        Width = 108
+        Height = 17
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -458,8 +468,8 @@ object frmMain: TfrmMain
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
         Top = 74
-        Width = 170
-        Height = 19
+        Width = 166
+        Height = 17
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -467,8 +477,8 @@ object frmMain: TfrmMain
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
         Top = 116
-        Width = 175
-        Height = 19
+        Width = 171
+        Height = 17
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -476,8 +486,8 @@ object frmMain: TfrmMain
       object cbSyncMovements: TRzCheckBox
         Left = 16
         Top = 158
-        Width = 208
-        Height = 19
+        Width = 204
+        Height = 17
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -485,8 +495,8 @@ object frmMain: TfrmMain
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
         Top = 200
-        Width = 235
-        Height = 19
+        Width = 231
+        Height = 17
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -494,7 +504,6 @@ object frmMain: TfrmMain
     end
     object tsItems: TRzTabSheet
       Caption = 'Items'
-      ExplicitHeight = 637
       object RzLabel22: TRzLabel
         Left = 24
         Top = 34
@@ -565,7 +574,6 @@ object frmMain: TfrmMain
     end
     object TabSheet4: TRzTabSheet
       Caption = 'Financial records'
-      ExplicitHeight = 637
       object RzLabel26: TRzLabel
         Left = 32
         Top = 42
@@ -620,7 +628,6 @@ object frmMain: TfrmMain
     end
     object TabSheet7: TRzTabSheet
       Caption = 'Sales transaction'
-      ExplicitHeight = 637
       object RzLabel32: TRzLabel
         Left = 32
         Top = 42
@@ -646,7 +653,6 @@ object frmMain: TfrmMain
       end
       object RzTabSheet1: TRzTabSheet
         Caption = 'Financial records'
-        ExplicitHeight = 637
         object RzLabel28: TRzLabel
           Left = 32
           Top = 42
@@ -730,7 +736,6 @@ object frmMain: TfrmMain
     end
     object TabSheet8: TRzTabSheet
       Caption = 'Movements transactions'
-      ExplicitHeight = 637
       object RzLabel35: TRzLabel
         Left = 32
         Top = 42
@@ -785,7 +790,6 @@ object frmMain: TfrmMain
     end
     object TabSheet9: TRzTabSheet
       Caption = 'Stock regulation transations'
-      ExplicitHeight = 637
       object RzLabel38: TRzLabel
         Left = 32
         Top = 42
@@ -841,7 +845,6 @@ object frmMain: TfrmMain
     object tsGeneralLog: TRzTabSheet
       OnShow = tsGeneralLogShow
       Caption = 'Programlog'
-      ExplicitHeight = 637
       object mmoLog: TRzMemo
         Left = 217
         Top = 0
@@ -849,7 +852,6 @@ object frmMain: TfrmMain
         Height = 690
         Align = alClient
         TabOrder = 0
-        ExplicitHeight = 637
       end
       object lbLogFiles: TRzListBox
         Left = 0
@@ -860,13 +862,11 @@ object frmMain: TfrmMain
         ItemHeight = 15
         TabOrder = 1
         OnClick = lbLogFilesClick
-        ExplicitHeight = 637
       end
     end
     object TabSheet5: TRzTabSheet
       OnShow = TabSheet5Show
       Caption = 'Business Central Log'
-      ExplicitHeight = 637
       object lbBCLogFiles: TRzListBox
         Left = 0
         Top = 0
@@ -876,7 +876,6 @@ object frmMain: TfrmMain
         ItemHeight = 15
         TabOrder = 0
         OnClick = lbBCLogFilesClick
-        ExplicitHeight = 637
       end
       object mmoBCLogs: TRzMemo
         Left = 297
@@ -885,13 +884,11 @@ object frmMain: TfrmMain
         Height = 690
         Align = alClient
         TabOrder = 1
-        ExplicitHeight = 637
       end
     end
     object TabSheet6: TRzTabSheet
       OnShow = TabSheet6Show
       Caption = 'Finanseksportlog'
-      ExplicitHeight = 637
       object lbFinansLogFiles: TRzListBox
         Left = 0
         Top = 0
@@ -901,7 +898,6 @@ object frmMain: TfrmMain
         ItemHeight = 15
         TabOrder = 0
         OnClick = lbFinansLogFilesClick
-        ExplicitHeight = 637
       end
       object mmoFinansLog: TRzMemo
         Left = 297
@@ -910,13 +906,12 @@ object frmMain: TfrmMain
         Height = 690
         Align = alClient
         TabOrder = 1
-        ExplicitHeight = 637
       end
     end
   end
   object RzSelectFolderDialog1: TRzSelectFolderDialog
     Title = 'V'#230'lg folder til logfiler'
-    Left = 200
-    Top = 688
+    Left = 336
+    Top = 624
   end
 end
