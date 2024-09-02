@@ -1381,6 +1381,33 @@ var
   end;
 
 begin
+  (*
+    Kaufmann - Sync af varer:
+    =========================
+
+    Der sker dette:
+
+    - Der skabes forbindelse til DB. Fejler den gøres ingenting.
+    - Laver BC Object (der sker ingenting her, andet end indstillinger loades)
+    - BRUGES IKKE. Læser (som det er i dag) - hvor mange dage tilbage, skal der kigges efter data.
+    - Læser (som det er i dag) - Hvornår kørte jeg sidst en succesful synk. Det kalder vi lige SidsteDatoForSuccesfuldKørsel
+    - Læser hvilken afdeling, der skal ligges til grund for kost- og salgspriser
+    - Henter data. I dag er det:
+    - Varer der er solgt, lagerført eller flyttet i den periode
+    - Bruger perioden SidsteDatoForSuccesfuldKørsel - NU
+    - Løber gennem alle data. Nu indsættes der varer via kmItem and kmVariant. Her kan der ske:
+    - En vare fejler. Dermed overføres ingen af denne varianter. Varen kommer på en fejlliste.
+    - Varen overføres. Alt er godt (faktisk kan jeg se, jeg tæller op, hvor mange gange, den er overført. Egentligt ubrugeligt)
+    - Når alt er gennemløbet gemmer jeg dato for sidst en succesful synk.
+    - Dvs. HVIS der var en fejl, og det var der, så vil næste kørsel gentage hele det samme igen. Og Robert satte vist bare datoen for sidste kørsel tli "meget langt tilbage". Og så gør rutinen det bare en gang mere.
+    - Er der en fejl, sendes der en mail.
+
+
+
+    Er der så varer, som konsekvent fejler, kunner det jo tyde på, at disse har en anden fejl.
+    Hvis de så konsekvent kaster en 404 - så skal jeg da undersøge, hvis en bestemt varer kaster denne.
+    Synes det er underligt at de er 404 for en bestemt
+  *)
   AddToLog('DoSyncronizeItems - BEGIN');
   try
     if (ConnectToDB) then
