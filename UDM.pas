@@ -1140,6 +1140,7 @@ var
         lkmItem.Laengde := '';
         lkmItem.EANNummer := '';
         lkmItem.Leverandoerensvarenummer := '';
+        lkmItem.Alternativtvarenummer := QFetchItems.FieldByName('ALT_VARE_NR').AsString;
         if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
           lkmItem.netWeight := lFloat
         else
@@ -1216,6 +1217,7 @@ var
         lkmItem.Laengde := QFetchItems.FieldByName('Laengde').AsString;
         lkmItem.EANNummer := QFetchItems.FieldByName('eannummer').AsString;
         lkmItem.Leverandoerensvarenummer := QFetchItems.FieldByName('levvarenr').AsString;
+        lkmItem.Alternativtvarenummer := QFetchItems.FieldByName('ALT_VARE_NR').AsString;
         if TryStrToFloat(QFetchItems.FieldByName('Weigth').AsString, lFloat) then
           lkmItem.netWeight := lFloat
         else
@@ -1442,205 +1444,148 @@ begin
           QFetchItems.SQL.Clear;
 {$IFDEF RELEASE}
           QFetchItems.SQL.Add(
-            'SELECT DISTINCT ' + #13#10 +
-            '    /*Hoved varenummer*/ ' + #13#10 +
-            '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
-            '    /*Barcode*/ ' + #13#10 +
-            '    vv.V509INDEX AS VariantID, ' + #13#10 +
-            '    /*Color*/ ' + #13#10 +
-            '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
-            '    /*Size*/ ' + #13#10 +
-            '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
-            '    /*Length*/ ' + #13#10 +
-            '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
-            '    /*EANNumber*/ ' + #13#10 +
-            '    vv.eannummer, ' + #13#10 +
-            '    /*Suppliers item numbmer*/ ' + #13#10 +
-            '    vv.levvarenr, ' + #13#10 +
-            '    /*Items description*/ ' + #13#10 +
-            '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
-            '    /*Description 2*/ ' + #13#10 +
-            '    v.VARENAVN2, ' + #13#10 +
-            '    /*Description 3*/ ' + #13#10 +
-            '    v.VARENAVN3, ' + #13#10 +
-            '    /*Style*/ ' + #13#10 +
-            '    v.MODEL AS Model, ' + #13#10 +
-            '    /*Brand short number*/ ' + #13#10 +
-            '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
-            '    /*Brand*/ ' + #13#10 +
-            '    v.leverid, ' + #13#10 +
-            '    /*Group short number*/ ' + #13#10 +
-            '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
-            '    /*Group*/ ' + #13#10 +
-            '    v.varegrpid, ' + #13#10 +
-            '    /*Country*/ ' + #13#10 +
-            '    v.KATEGORI1 AS Country, ' + #13#10 +
-            '    /*Weigth*/ ' + #13#10 +
-            '    v.KATEGORI2 AS Weigth, ' + #13#10 +
-            '    /*IntraStat value*/ ' + #13#10 +
-            '    v.INTRASTAT, ' + #13#10 +
-            '    /*Cost price from selected department*/ ' + #13#10 +
-            '    (SELECT ' + #13#10 +
-            '         vfsd.VEJETKOSTPRISSTK ' + #13#10 +
-            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
-            '     WHERE ' + #13#10 +
-            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Kostpris, ' + #13#10 +
-            '    /*Sale price from selected department*/ ' + #13#10 +
-            '    (SELECT ' + #13#10 +
-            '         vfsd.SALGSPRISSTK ' + #13#10 +
-            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
-            '     WHERE ' + #13#10 +
-            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Salgspris ' + #13#10 +
-            'FROM transaktioner t ' + #13#10 +
-            '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
-            '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN) ' + #13#10 +
-            '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
-            '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
-            'WHERE ' + #13#10 +
-            '    t.dato >= :PStartDato AND ' + #13#10 +
-            '    t.dato <= :PSlutDato AND ' + #13#10 +
-            '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
-            'ORDER BY ' + #13#10 +
-            '    /*Hoved varenummer*/ ' + #13#10 +
-            '    t.VAREFRVSTRNR, ' + #13#10 +
-            '    /*Barcode*/ ' + #13#10 +
-            '    vv.V509INDEX '
+            'SELECT DISTINCT' + #13#10 +
+            '    /*Hoved varenummer*/' + #13#10 +
+            '    VARER.plu_nr AS VAREID,' + #13#10 +
+            '    /* Date of creation or last change*/' + #13#10 +
+            '    VARER.bc_updatedate,' + #13#10 +
+            '    /*Barcode*/' + #13#10 +
+            '    VAREFRVSTR.V509INDEX AS VARIANTID,' + #13#10 +
+            '    /*Color*/' + #13#10 +
+            '    VAREFRVSTR.FARVE_NAVN AS FARVE,' + #13#10 +
+            '    /*Size*/' + #13#10 +
+            '    VAREFRVSTR.STOERRELSE_NAVN AS STORRELSE,' + #13#10 +
+            '    /*Length*/' + #13#10 +
+            '    VAREFRVSTR.LAENGDE_NAVN AS LAENGDE,' + #13#10 +
+            '    /*EANNumber*/' + #13#10 +
+            '    VAREFRVSTR.EANNUMMER,' + #13#10 +
+            '    /*Suppliers item numbmer*/' + #13#10 +
+            '    VAREFRVSTR.LEVVARENR,' + #13#10 +
+            '    /*Items description*/' + #13#10 +
+            '    VARER.VARENAVN1 AS BESKRIVELSE,' + #13#10 +
+            '    /*Alternative item number*/' + #13#10 +
+            '    VARER.ALT_VARE_NR,' + #13#10 +
+            '    /*Description 2*/' + #13#10 +
+            '    VARER.VARENAVN2,' + #13#10 +
+            '    /*Description 3*/' + #13#10 +
+            '    VARER.VARENAVN3,' + #13#10 +
+            '    /*Style*/' + #13#10 +
+            '    VARER.MODEL AS MODEL,' + #13#10 +
+            '    /*Brand short number*/' + #13#10 +
+            '    LEVERANDOERER.V509INDEX AS LEVERANDORKODE,' + #13#10 +
+            '    /*Brand*/' + #13#10 +
+            '    VARER.LEVERID,' + #13#10 +
+            '    /*Group short number*/' + #13#10 +
+            '    VAREGRUPPER.V509INDEX AS VAREGRUPPE,' + #13#10 +
+            '    /*Group*/' + #13#10 +
+            '    VARER.VAREGRPID,' + #13#10 +
+            '    /*Country*/' + #13#10 +
+            '    VARER.KATEGORI1 AS COUNTRY,' + #13#10 +
+            '    /*Weigth*/' + #13#10 +
+            '    VARER.KATEGORI2 AS WEIGTH,' + #13#10 +
+            '    /*IntraStat value*/' + #13#10 +
+            '    VARER.INTRASTAT,' + #13#10 +
+            '    /*Cost price from selected department*/' + #13#10 +
+            '    (SELECT' + #13#10 +
+            '         VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK' + #13#10 +
+            '     FROM VAREFRVSTR_DETAIL' + #13#10 +
+            '     WHERE' + #13#10 +
+            '         VAREFRVSTR_DETAIL.v509index = VAREFRVSTR.v509index' + #13#10 +
+            '         AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID) AS KOSTPRIS,' + #13#10 +
+            '    /*Sale price from selected department*/' + #13#10 +
+            '    (SELECT' + #13#10 +
+            '         VAREFRVSTR_DETAIL.SALGSPRISSTK' + #13#10 +
+            '     FROM VAREFRVSTR_DETAIL' + #13#10 +
+            '     WHERE' + #13#10 +
+            '         VAREFRVSTR_DETAIL.v509index = VAREFRVSTR.v509index' + #13#10 +
+            '         AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID) AS SALGSPRIS' + #13#10 +
+            'FROM VARER' + #13#10 +
+            '    INNER JOIN VAREFRVSTR ON' + #13#10 +
+            '          (VAREFRVSTR.VAREPLU_ID = VARER.plu_nr)' + #13#10 +
+            '    INNER JOIN LEVERANDOERER ON' + #13#10 +
+            '          (LEVERANDOERER.NAVN = VARER.leverid)' + #13#10 +
+            '    INNER JOIN VAREGRUPPER ON' + #13#10 +
+            '          (VAREGRUPPER.NAVN = VARER.varegrpid)' + #13#10 +
+            'WHERE' + #13#10 +
+            '  VARER.bc_updatedate>=:PStartDato and VARER.bc_updatedate<=:PSlutDato' + #13#10 +
+            'ORDER BY' + #13#10 +
+            '    /*Hoved varenummer*/' + #13#10 +
+            '    VARER.plu_nr,' + #13#10 +
+            '    /*Barcode*/' + #13#10 +
+            '    VAREFRVSTR.v509index'
             );
-          // QFetchItems.SQL.Add(
-          // 'SELECT DISTINCT ' +
-          // '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
-          // '    vfsd.VEJETKOSTPRISSTK AS Kostpris, ' + #13#10 +
-          // '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
-          // '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
-          // '    v.MODEL AS Model, ' + #13#10 +
-          // '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
-          // '    vfsd.SALGSPRISSTK AS Salgspris, ' + #13#10 +
-          // '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
-          // '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
-          // '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
-          // '    vv.V509INDEX AS VariantID, ' + #13#10 +
-          // '    v.KATEGORI1 AS Country, ' + #13#10 +
-          // '    v.KATEGORI2 AS Weigth, ' + #13#10 +
-          // '    v.INTRASTAT ' + #13#10 +
-          // 'FROM transaktioner t ' + #13#10 +
-          // '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
-          // '    INNER JOIN VareFrvStr_Detail vfsd ON (vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-          // '          vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-          // '          vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-          // '          vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-          // '          vfsd.afdeling_ID = :PAfdeling_ID) ' + #13#10 +
-          // '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-          // '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-          // '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-          // '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-          // '          vv.EKSPORTERET = 0) ' + #13#10 +
-          // '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
-          // '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
-          // 'WHERE ' + #13#10 +
-          // '    t.dato >= :PStartDato AND ' + #13#10 +
-          // '    t.dato <= :PSlutDato AND ' + #13#10 +
-          // '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
-          // 'ORDER BY ' + #13#10 +
-          // '    4, ' + #13#10 +
-          // '    11 '
-          // );
 {$ENDIF}
 {$IFDEF DEBUG}
-          (*
-            Here we will fetch all items which has ben sold, regulated or moved within a given date interval.
-            We will fetch cost- and sales prices from a department selected by user
-
-            This will not take into account if item has been exported.
-            It will just export items touched regarding stock.
-
-            We will also need to select items which has been touch in any other way (edited fields of importance)
-          *)
           QFetchItems.SQL.Add(
-            'SELECT DISTINCT ' + #13#10 +
-            '    /*Hoved varenummer*/ ' + #13#10 +
-            '    t.VAREFRVSTRNR AS VareID, ' + #13#10 +
-            '    /*Barcode*/ ' + #13#10 +
-            '    vv.V509INDEX AS VariantID, ' + #13#10 +
-            '    /*Color*/ ' + #13#10 +
-            '    vv.FARVE_NAVN AS Farve, ' + #13#10 +
-            '    /*Size*/ ' + #13#10 +
-            '    vv.STOERRELSE_NAVN AS Storrelse, ' + #13#10 +
-            '    /*Length*/ ' + #13#10 +
-            '    vv.LAENGDE_NAVN AS Laengde, ' + #13#10 +
-            '    /*EANNumber*/ ' + #13#10 +
-            '    vv.eannummer, ' + #13#10 +
-            '    /*Suppliers item numbmer*/ ' + #13#10 +
-            '    vv.levvarenr, ' + #13#10 +
-            '    /*Items description*/ ' + #13#10 +
-            '    v.VARENAVN1 AS Beskrivelse, ' + #13#10 +
-            '    /*Description 2*/ ' + #13#10 +
-            '    v.VARENAVN2, ' + #13#10 +
-            '    /*Description 3*/ ' + #13#10 +
-            '    v.VARENAVN3, ' + #13#10 +
-            '    /*Style*/ ' + #13#10 +
-            '    v.MODEL AS Model, ' + #13#10 +
-            '    /*Brand short number*/ ' + #13#10 +
-            '    l.V509INDEX AS LeverandorKode, ' + #13#10 +
-            '    /*Brand*/ ' + #13#10 +
-            '    v.leverid, ' + #13#10 +
-            '    /*Group short number*/ ' + #13#10 +
-            '    vg.V509INDEX AS Varegruppe, ' + #13#10 +
-            '    /*Group*/ ' + #13#10 +
-            '    v.varegrpid, ' + #13#10 +
-            '    /*Country*/ ' + #13#10 +
-            '    v.KATEGORI1 AS Country, ' + #13#10 +
-            '    /*Weigth*/ ' + #13#10 +
-            '    v.KATEGORI2 AS Weigth, ' + #13#10 +
-            '    /*IntraStat value*/ ' + #13#10 +
-            '    v.INTRASTAT, ' + #13#10 +
-            '    /*Cost price from selected department*/ ' + #13#10 +
-            '    (SELECT ' + #13#10 +
-            '         vfsd.VEJETKOSTPRISSTK ' + #13#10 +
-            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
-            '     WHERE ' + #13#10 +
-            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Kostpris, ' + #13#10 +
-            '    /*Sale price from selected department*/ ' + #13#10 +
-            '    (SELECT ' + #13#10 +
-            '         vfsd.SALGSPRISSTK ' + #13#10 +
-            '     FROM VareFrvStr_Detail vfsd ' + #13#10 +
-            '     WHERE ' + #13#10 +
-            '         vfsd.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '         vfsd.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '         vfsd.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '         vfsd.LAENGDE_NAVN = t.LAENGDE_NAVN AND ' + #13#10 +
-            '         vfsd.afdeling_ID = :PAfdeling_ID) AS Salgspris ' + #13#10 +
-            'FROM transaktioner t ' + #13#10 +
-            '    INNER JOIN Varer v ON (V.PLU_NR = t.VAREFRVSTRNR) ' + #13#10 +
-            '    INNER JOIN VareFrvStr vv ON (vv.VAREPLU_ID = t.VAREFRVSTRNR AND ' + #13#10 +
-            '          vv.FARVE_NAVN = t.FARVE_NAVN AND ' + #13#10 +
-            '          vv.STOERRELSE_NAVN = t.STOERRELSE_NAVN AND ' + #13#10 +
-            '          vv.LAENGDE_NAVN = t.LAENGDE_NAVN) ' + #13#10 +
-            '    INNER JOIN leverandoerer l ON (l.NAVN = t.LEVNAVN) ' + #13#10 +
-            '    INNER JOIN varegrupper vg ON (vg.NAVN = t.VAREGRPID) ' + #13#10 +
-            'WHERE ' + #13#10 +
-            '    t.dato >= :PStartDato AND ' + #13#10 +
-            '    t.dato <= :PSlutDato AND ' + #13#10 +
-            '    t.ART IN (0, 1, 11, 14) ' + #13#10 +
-            'ORDER BY ' + #13#10 +
-            '    /*Hoved varenummer*/ ' + #13#10 +
-            '    t.VAREFRVSTRNR, ' + #13#10 +
-            '    /*Barcode*/ ' + #13#10 +
-            '    vv.V509INDEX '
+            'SELECT DISTINCT' + #13#10 +
+            '    /*Hoved varenummer*/' + #13#10 +
+            '    VARER.plu_nr AS VAREID,' + #13#10 +
+            '    /* Date of creation or last change*/' + #13#10 +
+            '    VARER.bc_updatedate,' + #13#10 +
+            '    /*Barcode*/' + #13#10 +
+            '    VAREFRVSTR.V509INDEX AS VARIANTID,' + #13#10 +
+            '    /*Color*/' + #13#10 +
+            '    VAREFRVSTR.FARVE_NAVN AS FARVE,' + #13#10 +
+            '    /*Size*/' + #13#10 +
+            '    VAREFRVSTR.STOERRELSE_NAVN AS STORRELSE,' + #13#10 +
+            '    /*Length*/' + #13#10 +
+            '    VAREFRVSTR.LAENGDE_NAVN AS LAENGDE,' + #13#10 +
+            '    /*EANNumber*/' + #13#10 +
+            '    VAREFRVSTR.EANNUMMER,' + #13#10 +
+            '    /*Suppliers item numbmer*/' + #13#10 +
+            '    VAREFRVSTR.LEVVARENR,' + #13#10 +
+            '    /*Items description*/' + #13#10 +
+            '    VARER.VARENAVN1 AS BESKRIVELSE,' + #13#10 +
+            '    /*Alternative item number*/' + #13#10 +
+            '    VARER.ALT_VARE_NR,' + #13#10 +
+            '    /*Description 2*/' + #13#10 +
+            '    VARER.VARENAVN2,' + #13#10 +
+            '    /*Description 3*/' + #13#10 +
+            '    VARER.VARENAVN3,' + #13#10 +
+            '    /*Style*/' + #13#10 +
+            '    VARER.MODEL AS MODEL,' + #13#10 +
+            '    /*Brand short number*/' + #13#10 +
+            '    LEVERANDOERER.V509INDEX AS LEVERANDORKODE,' + #13#10 +
+            '    /*Brand*/' + #13#10 +
+            '    VARER.LEVERID,' + #13#10 +
+            '    /*Group short number*/' + #13#10 +
+            '    VAREGRUPPER.V509INDEX AS VAREGRUPPE,' + #13#10 +
+            '    /*Group*/' + #13#10 +
+            '    VARER.VAREGRPID,' + #13#10 +
+            '    /*Country*/' + #13#10 +
+            '    VARER.KATEGORI1 AS COUNTRY,' + #13#10 +
+            '    /*Weigth*/' + #13#10 +
+            '    VARER.KATEGORI2 AS WEIGTH,' + #13#10 +
+            '    /*IntraStat value*/' + #13#10 +
+            '    VARER.INTRASTAT,' + #13#10 +
+            '    /*Cost price from selected department*/' + #13#10 +
+            '    (SELECT' + #13#10 +
+            '         VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK' + #13#10 +
+            '     FROM VAREFRVSTR_DETAIL' + #13#10 +
+            '     WHERE' + #13#10 +
+            '         VAREFRVSTR_DETAIL.v509index = VAREFRVSTR.v509index' + #13#10 +
+            '         AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID) AS KOSTPRIS,' + #13#10 +
+            '    /*Sale price from selected department*/' + #13#10 +
+            '    (SELECT' + #13#10 +
+            '         VAREFRVSTR_DETAIL.SALGSPRISSTK' + #13#10 +
+            '     FROM VAREFRVSTR_DETAIL' + #13#10 +
+            '     WHERE' + #13#10 +
+            '         VAREFRVSTR_DETAIL.v509index = VAREFRVSTR.v509index' + #13#10 +
+            '         AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID) AS SALGSPRIS' + #13#10 +
+            'FROM VARER' + #13#10 +
+            '    INNER JOIN VAREFRVSTR ON' + #13#10 +
+            '          (VAREFRVSTR.VAREPLU_ID = VARER.plu_nr)' + #13#10 +
+            '    INNER JOIN LEVERANDOERER ON' + #13#10 +
+            '          (LEVERANDOERER.NAVN = VARER.leverid)' + #13#10 +
+            '    INNER JOIN VAREGRUPPER ON' + #13#10 +
+            '          (VAREGRUPPER.NAVN = VARER.varegrpid)' + #13#10 +
+            'WHERE' + #13#10 +
+            '  VARER.bc_updatedate>=:PStartDato and VARER.bc_updatedate<=:PSlutDato' + #13#10 +
+            'ORDER BY' + #13#10 +
+            '    /*Hoved varenummer*/' + #13#10 +
+            '    VARER.plu_nr,' + #13#10 +
+            '    /*Barcode*/' + #13#10 +
+            '    VAREFRVSTR.v509index'
             );
           lToDateAndTime := NOW;
 {$ENDIF}
