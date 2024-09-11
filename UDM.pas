@@ -1336,7 +1336,9 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, LF_BC_Version));
+//          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, LF_BC_Version));
+          //As per 11-09-2024 NT wrote they do not want to have data in kmVariant - So it has been disabled
+          DoContinue := TRUE;
         end;
 
         if DoContinue then
