@@ -925,6 +925,7 @@ var
 
           if DoContinue then
           begin
+            iniFile.WriteDateTime('FinancialRecords', 'Last run', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
             WriteEksportedRecordToTextfile;
             Result := MarkRecordAsHandled(QFetchFinancialRecords.FieldByName('ID').AsInteger);
           end
@@ -987,12 +988,16 @@ begin
           tnMain.StartTransaction;
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
+        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
         lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
         lToDateAndTime := NOW;
 
-        AddToLog(Format('  Fetching records. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+        AddToLog(Format('  Fetching records. Period %s to %s',
+          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
+        // Needs to be fetched in ascending date order
         QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
         QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
         QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder + 'FinancialRecords.SQL');
@@ -1336,8 +1341,8 @@ var
         end
         else
         begin
-//          DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, LF_BC_Version));
-          //As per 11-09-2024 NT wrote they do not want to have data in kmVariant - So it has been disabled
+          // DoContinue := (lBusinessCentral.PostkmVariantId(lBusinessCentralSetup, lkmVariantId, lResponse, LF_BC_Version));
+          // As per 11-09-2024 NT wrote they do not want to have data in kmVariant - So it has been disabled
           DoContinue := TRUE;
         end;
 
@@ -1815,6 +1820,8 @@ var
 
           if DoContinue then
           begin
+            // We succesfully inserted a record. Set LAST RUN
+            iniFile.WriteDateTime('SalesTransaction', 'Last run', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
             Result := DoMarkSalesTransactionsAsExported;
           end
           else
@@ -1876,18 +1883,20 @@ begin
         if (NOT(tnMain.Active)) then
           tnMain.StartTransaction;
 
-        // Date of last run
         lDaysToLookAfterRecords := iniFile.ReadInteger('SalesTransaction', 'Days to look for records', 5);
+        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+        // Date of last run
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('SalesTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
         lFromDateAndTime := lDateAndTimeOfLastRun;
         // Date until now
         lToDateAndTime := NOW;
 
         // Log
-        AddToLog(Format('  Fetching sales transactions. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+        AddToLog(Format('  Fetching sales transactions. Period %s to %s',
+          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
           FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
-        // Fetch sales transactions.
+        // Fetch sales transactions. The need to be fetched in ascending date order
         QFetchSalesTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
         QFetchSalesTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
         QFetchSalesTransactions.SQL.SaveToFile(SQLLogFileFolder + 'SalesTransactions.SQL');
@@ -1911,7 +1920,14 @@ begin
               QFetchSalesTransactions.Next;
             end;
           end;
-          AddToLog('  Iteration done');
+          if RoutineCanceled then
+          begin
+            AddToLog('  Iteration done with errors. ');
+          end
+          else
+          begin
+            AddToLog('  Iteration done succesfull');
+          end;
 
           if (NOT(RoutineCanceled)) then
           begin
@@ -2086,6 +2102,8 @@ var
 
           if DoContinue then
           begin
+
+            iniFile.WriteDateTime('MovementsTransaction', 'Last run', QFetchMovementsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
             Result := DoMarkMovementTransactionsAsExported;
           end
           else
@@ -2148,19 +2166,20 @@ begin
 
         // Date of last run
         lDaysToLookAfterRecords := iniFile.ReadInteger('MovementsTransaction', 'Days to look for records', 5);
+        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('MovementsTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
         lFromDateAndTime := lDateAndTimeOfLastRun;
         // Date until now
         lToDateAndTime := NOW;
 
         // Log
-        AddToLog(Format('  Fetching records. movements transactons. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+        AddToLog(Format('  Fetching records. movements transactons. Period %s to %s',
+          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
           FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
         // Fetch movements transactions.
-
         // AND  (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)
-
+        // We need to fetch them in ascending date order
         QFetchMovementsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
         QFetchMovementsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
         QFetchMovementsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'MovementsTransactions.SQL');

@@ -69,9 +69,7 @@ object DM: TDM
       '    POSTERINGER.Dato <= :PSlutDato AND'
       '    POSTERINGER.Behandlet >= 0'
       'ORDER BY'
-      '    POSTERINGER.afdeling_ID,'
-      '    POSTERINGER.Dato,'
-      '    POSTERINGER.PostType  ')
+      '    POSTERINGER.Dato ASC')
     Left = 72
     Top = 463
     ParamData = <
@@ -189,42 +187,35 @@ object DM: TDM
     Connection = dbMain
     Transaction = tnMain
     SQL.Strings = (
-      'select '
-      '  tr.TRANSID as EpID, '
-      '  tr.UAFD_NAVN as Kasse, '
-      '  tr.KOSTPR as KostPris, '
-      '  tr.Eksporteret, '
-      '  tr.AFDELING_ID, '
-      '  af.NAVISION_IDX as ButikID, '
-      '  tr.SALGSTK as Antal, '
-      '  vfs.V509INDEX as VariantID, '
-      '  tr.BONNR as Bonnummer, '
-      '  tr.VAREFRVSTRNR as VareID, '
-      '  tr.SALGKR as Salgspris, '
-      '  tr.MomsKr as MomsBelob, '
-      '  tr.DATO as BogforingsDato '
-      'from transaktioner tr '
-      '  inner join afdeling af on (af.AFDELINGSNUMMER=tr.AFDELING_ID) '
-      '  Inner join varefrvstr vfs on ( '
-      
-        '                                 vfs.VAREPLU_ID=tr.VAREFRVSTRNR ' +
-        'and '
-      
-        '                                 vfs.FARVE_NAVN=tr.FARVE_NAVN an' +
-        'd '
-      
-        '                                 vfs.STOERRELSE_NAVN=tr.STOERREL' +
-        'SE_NAVN and '
-      
-        '                                 vfs.LAENGDE_NAVN=tr.LAENGDE_NAV' +
-        'N '
-      '                                ) '
-      'where '
-      '  tr.dato>=:PFromDate and '
-      '  tr.dato<=:PToDate and '
-      '  tr.art IN (0,1) '
-      '  and (tr.EKSPORTERET=0 or tr.EKSPORTERET IS null)'
-      'Order by 1')
+      'SELECT'
+      '    TR.TRANSID AS EPID,'
+      '    TR.UAFD_NAVN AS KASSE,'
+      '    TR.KOSTPR AS KOSTPRIS,'
+      '    TR.EKSPORTERET,'
+      '    TR.AFDELING_ID,'
+      '    AF.NAVISION_IDX AS BUTIKID,'
+      '    TR.SALGSTK AS ANTAL,'
+      '    VFS.V509INDEX AS VARIANTID,'
+      '    TR.BONNR AS BONNUMMER,'
+      '    TR.VAREFRVSTRNR AS VAREID,'
+      '    TR.SALGKR AS SALGSPRIS,'
+      '    TR.MOMSKR AS MOMSBELOB,'
+      '    TR.DATO AS BOGFORINGSDATO'
+      'FROM TRANSAKTIONER TR'
+      '    INNER JOIN AFDELING AF ON'
+      '          (AF.AFDELINGSNUMMER = TR.AFDELING_ID)'
+      '    INNER JOIN VAREFRVSTR VFS ON'
+      '          (VFS.VAREPLU_ID = TR.VAREFRVSTRNR'
+      '          AND VFS.FARVE_NAVN = TR.FARVE_NAVN'
+      '          AND VFS.STOERRELSE_NAVN = TR.STOERRELSE_NAVN'
+      '          AND VFS.LAENGDE_NAVN = TR.LAENGDE_NAVN)'
+      'WHERE'
+      '    TR.DATO >= :PFROMDATE'
+      '    AND TR.DATO <= :PTODATE'
+      '    AND TR.ART IN (0, 1)'
+      '    AND (TR.EKSPORTERET = 0 OR TR.EKSPORTERET IS NULL)'
+      'ORDER BY'
+      '    TR.DATO ASC')
     Left = 920
     Top = 240
     ParamData = <
@@ -322,39 +313,37 @@ object DM: TDM
     Transaction = tnMain
     SQL.Strings = (
       'SELECT'
-      '    tr.Eksporteret,'
-      '    tr.TransID AS EPID,'
-      '    tr.BONNR AS FlytningsID,'
-      '    tr.dato AS Bogforingsdato,'
-      '    tr.TILBUTIK AS TilButik2,'
+      '    TR.EKSPORTERET,'
+      '    TR.TRANSID AS EPID,'
+      '    TR.BONNR AS FLYTNINGSID,'
+      '    TR.DATO AS BOGFORINGSDATO,'
+      '    TR.TILBUTIK AS TILBUTIK2,'
       '    (SELECT'
       '         NAVISION_IDX'
-      '     FROM afdeling'
+      '     FROM AFDELING'
       '     WHERE'
-      '         afdelingsnummer = TR.TILBUTIK) AS TIlButik,'
-      '    tr.AFDELING_ID AS FraButik2,'
-      '    af.NAVISION_IDX AS FraButik,'
-      '    tr.VAREFRVSTRNR AS VareID,'
-      '    vfs.V509INDEX AS VariantID,'
-      '    tr.SalgStk AS Antal,'
-      '    tr.KostPr AS KostPris'
-      'FROM TRansaktioner tr'
-      
-        '    INNER JOIN afdeling af ON (af.AFDELINGSNUMMER = tr.AFDELING_' +
-        'ID)'
-      
-        '    LEFT JOIN varefrvstr vfs ON (vfs.VAREPLU_ID = tr.VAREFRVSTRN' +
-        'R AND'
-      '          vfs.FARVE_NAVN = tr.FARVE_NAVN AND'
-      '          vfs.STOERRELSE_NAVN = tr.STOERRELSE_NAVN AND'
-      '          vfs.LAENGDE_NAVN = tr.LAENGDE_NAVN)'
+      '         AFDELINGSNUMMER = TR.TILBUTIK) AS TILBUTIK,'
+      '    TR.AFDELING_ID AS FRABUTIK2,'
+      '    AF.NAVISION_IDX AS FRABUTIK,'
+      '    TR.VAREFRVSTRNR AS VAREID,'
+      '    VFS.V509INDEX AS VARIANTID,'
+      '    TR.SALGSTK AS ANTAL,'
+      '    TR.KOSTPR AS KOSTPRIS'
+      'FROM TRANSAKTIONER TR'
+      '    INNER JOIN AFDELING AF ON'
+      '          (AF.AFDELINGSNUMMER = TR.AFDELING_ID)'
+      '    LEFT JOIN VAREFRVSTR VFS ON'
+      '          (VFS.VAREPLU_ID = TR.VAREFRVSTRNR'
+      '          AND VFS.FARVE_NAVN = TR.FARVE_NAVN'
+      '          AND VFS.STOERRELSE_NAVN = TR.STOERRELSE_NAVN'
+      '          AND VFS.LAENGDE_NAVN = TR.LAENGDE_NAVN)'
       'WHERE'
-      '    tr.dato >= :PFromDate AND'
-      '    tr.dato <= :PToDate AND'
-      '    tr.art IN (14) AND'
-      '    tr.Pakkelinje IN (1, 5) /*Kun afgange*/'
+      '    TR.DATO >= :PFROMDATE'
+      '    AND TR.DATO <= :PTODATE'
+      '    AND TR.ART IN (14)'
+      '    AND TR.PAKKELINJE IN (1, 5) /*Kun afgange*/'
       'ORDER BY'
-      '    1  ')
+      '    TR.DATO ASC  ')
     Left = 768
     Top = 312
     ParamData = <
