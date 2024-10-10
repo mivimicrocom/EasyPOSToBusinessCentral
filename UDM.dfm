@@ -342,6 +342,7 @@ object DM: TDM
       '    AND TR.DATO <= :PTODATE'
       '    AND TR.ART IN (14)'
       '    AND TR.PAKKELINJE IN (1, 5) /*Kun afgange*/'
+      '    AND (TR.EKSPORTERET = 0 OR TR.EKSPORTERET IS NULL)'
       'ORDER BY'
       '    TR.DATO ASC  ')
     Left = 768

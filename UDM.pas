@@ -990,7 +990,7 @@ begin
         lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
         AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
-        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
+        lFromDateAndTime := lDateAndTimeOfLastRun;
         lToDateAndTime := NOW;
 
         AddToLog(Format('  Fetching records. Period %s to %s',
@@ -1002,9 +1002,6 @@ begin
         QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
         QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder + 'FinancialRecords.SQL');
         QFetchFinancialRecords.Open;
-        QFetchFinancialRecords.FetchAll;
-
-        AddToLog(Format('  Records fetched: %d', [QFetchFinancialRecords.RecordCount]));
 
         lExportCounter := 0;
         lErrorCounter := 0;
@@ -1015,22 +1012,19 @@ begin
           BC_TransactionID := FetchNextTransID('financial records');
           RoutineCanceled := FALSE;
           // Iterate through result set
-{$IFDEF DEBUG}
-          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) and (lExportCounter < 5) do
-{$ENDIF}
-{$IFDEF RELEASE}
-            while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) do
-{$ENDIF}
+          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) do
+          begin
+            RoutineCanceled := NOT CreateAndExportFinancialRecord;
+            if NOT RoutineCanceled then
             begin
-              RoutineCanceled := NOT CreateAndExportFinancialRecord;
-              if NOT RoutineCanceled then
-              begin
-                // save highest TransID of record
-                QFetchFinancialRecords.Next;
-              end;
+              // save highest TransID of record
+              QFetchFinancialRecords.Next;
             end;
+          end;
           AddToLog('  Iteration done');
 
+          // Lets set a date for the last time we were in this routine
+          iniFile.WriteDateTime('FinancialRecords', 'Last time sync to BC was tried', NOW);
           if (NOT(RoutineCanceled)) then
           begin
             /// All good
@@ -1040,8 +1034,8 @@ begin
               if (tnMain.Active) then
                 tnMain.Commit;
 
-              iniFile.WriteDateTime('FinancialRecords', 'Last time sync to BC was tried', NOW);
-              iniFile.WriteDateTime('FinancialRecords', 'Last run', lToDateAndTime);
+              // This is now set after each succesful transfer of a record
+              // iniFile.WriteDateTime('FinancialRecords', 'Last run', lToDateAndTime);
               InsertTracingLog(15, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
             end;
           end
@@ -1054,6 +1048,11 @@ begin
               'Vedhæftet er en fil med information' + #13#10;
             SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
             // Rename error file
+
+            // Need to close whatever we are doing before inserting tracing record
+            QFetchFinancialRecords.Close;
+            if (tnMain.Active) then
+              tnMain.Commit;
             TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
             InsertTracingLog(16, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
           end;
@@ -1446,6 +1445,8 @@ begin
           lToDateAndTime := NOW;
 
           AddToLog(Format('  Department: %s ', [lDepartment]));
+          AddToLog(Format('  Days to look after records if not last run i in INI file: %s ', [lDaysToLookAfterRecords.ToString]));
+          AddToLog(Format('  Date/time of last run: %s ', [FormatDateTime('dd-mm-yyyy hh:mm:ss',lDateAndTimeOfLastRun)]));
           AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
           QFetchItems.SQL.Clear;
@@ -1599,9 +1600,6 @@ begin
           QFetchItems.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
           QFetchItems.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
           QFetchItems.ParamByName('PAfdeling_ID').AsString := lDepartment;
-          // {$IFDEF DEBUG}
-          // QFetchItems.ParamByName('PLever').AsString := 'ALLAN&CLARK';
-          // {$ENDIF}
           QFetchItems.SQL.SaveToFile(SQLLogFileFolder + 'Items.SQL');
           QFetchItems.Open;
           QFetchItems.FetchAll;
@@ -1621,10 +1619,11 @@ begin
             BC_ItemsTransactionID := FetchNextTransID('head items');
             BC_VariantsTransactionID := FetchNextTransID('variants');
             // Iterate through result set
-            while (NOT(QFetchItems.EOF)) do
+            while (NOT(QFetchItems.EOF)) AND (lErrorCounter = 0) do
             begin
               CreateAndExportItems;
-              QFetchItems.Next;
+              if (lErrorCounter = 0) then
+                QFetchItems.Next;
             end;
             AddToLog('  Iteration done');
             AddToLog(Format('  Exported %d head items, %d head item variants and %d variants', [lExportCounterHeadItems, lExportCounterHeadItemVariants, lExportCounterVariants]));
@@ -1929,6 +1928,10 @@ begin
             AddToLog('  Iteration done succesfull');
           end;
 
+          QFetchSalesTransactions.Close;
+          if (tnMain.Active) then
+            tnMain.Commit;
+
           if (NOT(RoutineCanceled)) then
           begin
             /// All good
@@ -1937,7 +1940,8 @@ begin
               if (tnMain.Active) then
                 tnMain.Commit;
 
-              iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
+              // This is now done after each successful transfer
+              // iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
               InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
             end;
           end
@@ -2102,7 +2106,6 @@ var
 
           if DoContinue then
           begin
-
             iniFile.WriteDateTime('MovementsTransaction', 'Last run', QFetchMovementsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
             Result := DoMarkMovementTransactionsAsExported;
           end
@@ -2202,12 +2205,16 @@ begin
           end;
           AddToLog('  Iteration done');
 
+          QFetchMovementsTransactions.Close;
+          if (tnMain.Active) then
+            tnMain.Commit;
+
           if (NOT(RoutineCanceled)) then
           begin
             if (tnMain.Active) then
               tnMain.Commit;
-
-            iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
+            // This is now done aftereach succesful transfer
+            // iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
             InsertTracingLog(11, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
           end
           else
@@ -2487,6 +2494,10 @@ begin
           end;
           AddToLog('  Iteration done');
 
+          QFetchStockRegulationsTransactions.Close;
+          if (tnMain.Active) then
+            tnMain.Commit;
+
           if (NOT(RoutineCanceled)) then
           begin
             if (tnMain.Active) then
@@ -2583,7 +2594,8 @@ begin
 
       if lSyncronizeStockRegulationsTransactions then
       begin
-        DoSyncronizeStockRegulationTransaction;
+        AddToLog(Format('Syncronize Stock regulations Transaction: DOES  NOT EXISTS', []));
+//        DoSyncronizeStockRegulationTransaction;
       end;
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
