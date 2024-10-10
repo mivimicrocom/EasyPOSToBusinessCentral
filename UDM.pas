@@ -1149,6 +1149,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
+        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVare').AsInteger;
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1226,6 +1227,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
+        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVare').AsInteger;
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1483,6 +1485,8 @@ begin
             '    LEVERANDOERER.V509INDEX AS LEVERANDORKODE,' + #13#10 +
             '    /*Brand*/' + #13#10 +
             '    VARER.LEVERID,' + #13#10 +
+            '    /*WEB Item marker*/' + #13#10 +
+            '    VARER.WEBVARER,' + #13#10 +
             '    /*Group short number*/' + #13#10 +
             '    VAREGRUPPER.V509INDEX AS VAREGRUPPE,' + #13#10 +
             '    /*Group*/' + #13#10 +
@@ -1556,6 +1560,8 @@ begin
             '    LEVERANDOERER.V509INDEX AS LEVERANDORKODE,' + #13#10 +
             '    /*Brand*/' + #13#10 +
             '    VARER.LEVERID,' + #13#10 +
+            '    /*WEB Item marker*/' + #13#10 +
+            '    VARER.WEBVARER,' + #13#10 +
             '    /*Group short number*/' + #13#10 +
             '    VAREGRUPPER.V509INDEX AS VAREGRUPPE,' + #13#10 +
             '    /*Group*/' + #13#10 +
