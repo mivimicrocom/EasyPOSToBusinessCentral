@@ -914,14 +914,12 @@ var
 
           // Add to log
           AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
-          if OnlyTestRoutine then
-          begin
-            DoContinue := TRUE;
-          end
-          else
-          begin
-            DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE, LF_BC_Version));
-          end;
+{$IFDEF RELEASE}
+          DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE, LF_BC_Version));
+{$ELSE}
+          DoContinue := TRUE;
+          AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
+{$ENDIF}
 
           if DoContinue then
           begin
@@ -988,9 +986,11 @@ begin
           tnMain.StartTransaction;
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
-        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+        AddToLog(Format('Days to look for records which are not yet transferred:  %s', [lDaysToLookAfterRecords.ToString]));
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
-        lFromDateAndTime := lDateAndTimeOfLastRun;
+//        lFromDateAndTime := lDateAndTimeOfLastRun;
+        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
         lToDateAndTime := NOW;
 
         AddToLog(Format('  Fetching records. Period %s to %s',
@@ -1889,10 +1889,12 @@ begin
           tnMain.StartTransaction;
 
         lDaysToLookAfterRecords := iniFile.ReadInteger('SalesTransaction', 'Days to look for records', 5);
-        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+        AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
         // Date of last run
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('SalesTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
-        lFromDateAndTime := lDateAndTimeOfLastRun;
+//        lFromDateAndTime := lDateAndTimeOfLastRun;
+        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
         // Date until now
         lToDateAndTime := NOW;
 
@@ -2175,9 +2177,11 @@ begin
 
         // Date of last run
         lDaysToLookAfterRecords := iniFile.ReadInteger('MovementsTransaction', 'Days to look for records', 5);
-        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+        AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
         lDateAndTimeOfLastRun := iniFile.ReadDateTime('MovementsTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
-        lFromDateAndTime := lDateAndTimeOfLastRun;
+//        lFromDateAndTime := lDateAndTimeOfLastRun;
+        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
         // Date until now
         lToDateAndTime := NOW;
 
@@ -2571,6 +2575,11 @@ begin
       lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
       lSyncronizeStockRegulationsTransactions := iniFile.ReadBool('SYNCRONIZE', 'StockRegulationsTransactions', FALSE);
 
+{$IFNDEF RELEASE}
+      AddToLog(Format('DEBUG MODE', []));
+{$ELSE}
+      AddToLog(Format('RELEASE MODE', []));
+{$ENDIF}
       AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
       AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
       AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
