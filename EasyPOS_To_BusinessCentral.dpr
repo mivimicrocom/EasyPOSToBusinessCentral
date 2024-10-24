@@ -1,18 +1,18 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-  {$IFNDEF RELEASE}
+{$IFNDEF RELEASE}
   forms,
-  {$ELSE}
+{$ELSE}
   Vcl.SvcMgr,
-  {$ENDIF }
-  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService},
-  UDM in 'UDM.pas' {DM: TDataModule},
-  {$IFNDEF RELEASE}
-  uMain in 'uMain.pas' {frmMain},
-  {$ENDIF }
+{$ENDIF }
+  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService} ,
+  UDM in 'UDM.pas' {DM: TDataModule} ,
+{$IFNDEF RELEASE}
+  uMain in 'uMain.pas' {frmMain} ,
+{$ENDIF }
   uBusinessCentralIntegration in 'BusinessCentral-Integration\uBusinessCentralIntegration.pas',
-  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany},
+  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany} ,
   uSendEMail in 'AfsendMail\uSendEMail.pas';
 
 {$R *.RES}
@@ -37,12 +37,12 @@ begin
   ReportMemoryLeaksOnShutdown := TRUE;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TfrmMain, frmMain);
-  {$ELSE}
+{$ELSE}
   if not Application.DelayInitialize or Application.Installing then
     Application.Initialize;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
-  {$ENDIF}
+{$ENDIF}
   Application.Run;
 
 end.
