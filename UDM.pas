@@ -1149,7 +1149,8 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
+//        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
+        lkmItem.WEBVare := Bool(QFetchItems.FieldByName('WEBVarer').AsInteger);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1162,7 +1163,7 @@ var
         end
         else
         begin
-          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, LF_BC_Version));
+          DoContinue := (lBusinessCentral.PostkmItem(lBusinessCentralSetup, lkmItem, lResponse, LF_BC_Version, TRUE));
         end;
 
         if DoContinue then
@@ -1227,7 +1228,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
+        lkmItem.WEBVare := Bool(QFetchItems.FieldByName('WEBVarer').AsInteger);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);

@@ -185,7 +185,7 @@ begin
 
   aMSG.From.Address := aMailSetup.SenderEMail;
   if aMailSetup.UseMicrocomMailServer then
-    aMSG.From.Name := aMailSetup.ReplyToName + ' på vegne af ' + aMailSetup.SenderName
+    aMSG.From.Name :=  aMailSetup.SenderName + ' på vegne af ' + aMailSetup.ReplyToName
   else
   begin
     aMSG.From.Name := aMailSetup.SenderName;
