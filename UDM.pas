@@ -478,11 +478,18 @@ end;
 
 Function TDM.FetchNextTransID(aTransactionIDUSedFor: String): Integer;
 begin
+{$IFDEF DEBUG}
+  AddToLog(Format('  DEBUG Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
+  Result := 1234567;
+  AddToLog(Format('    Transaction ID: %d.', [Result]))
+{$ENDIF}
+{$IFDEF RELEASE}
   AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
   AddToLog(Format('    Transaction ID: %d.', [Result]))
+{$ENDIF}
 end;
 
 function TDM.FetchBCSettings: Boolean;
