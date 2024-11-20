@@ -632,6 +632,7 @@ var
   RoutineCanceled: Boolean;
   lText: string;
   lNumberOfCostpriceUpdates: Integer;
+  NumberOfItemsToHandle: Integer;
 
   function UpdateCostpriceOnItemInEasyPOS: Boolean;
   var
@@ -647,6 +648,8 @@ var
       QueryString: TStringBuilder;
       VareId: string;
     begin
+      // This will build the filter value to filter the result from Business Central
+      // This will be all variants to this head item
       // Initialiser TStringBuilder
       QueryString := TStringBuilder.Create;
       try
@@ -654,6 +657,7 @@ var
         QItemsTemp.SQL.Clear;
         QItemsTemp.SQL.Add('Select vv.v509index from varefrvstr vv where vv.vareplu_id = :Pvareplu_id');
         QItemsTemp.ParamByName('Pvareplu_id').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
+        QItemsTemp.SQL.SaveToFile(SQLLogFileFolder + 'FetchBarcodeToHeadItem.SQL');
         QItemsTemp.Open;
 
         QItemsTemp.First; // Start ved den første record
@@ -710,7 +714,10 @@ var
         // Lets set a new cost price on this variant in this department.
         AddToLog(Format('  Set costprice to %s on variant %s in department %s', [aCostprice.ToString, aBarcode, aDepartment]));
         lSQLString := 'UPDATE VAREFRVSTR_DETAIL SET' + #13#10 +
-          '  VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK = :PVEJETKOSTPRISSTK ' + #13#10 +
+          '  VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK = :PVEJETKOSTPRISSTK, ' + #13#10 +
+          '  SIDSTEKOBSSTK = 1, ' + #13#10 +
+          '  SIDSTEKOSTPRSTK = :PVEJETKOSTPRISSTK ' + #13#10 +
+        // *This field is the TOTAL costprice for the above quantity. Its important when ANTALSTK ends on 0 (due to triggers)*/
           'WHERE' + #13#10 +
           '  VAREFRVSTR_DETAIL.V509INDEX = :PV509INDEX ' + #13#10 +
           '  AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID ';
@@ -719,12 +726,15 @@ var
         qUpdateCostprice.ParamByName('PVEJETKOSTPRISSTK').AsFloat := aCostprice;
         qUpdateCostprice.ParamByName('PV509INDEX').AsString := aBarcode;
         qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
+        qUpdateCostprice.SQL.SaveToFile(SQLLogFileFolder + 'UpdateCostPriceOnVariant.SQL');
         qUpdateCostprice.ExecSQL;
 
+        // Lets insert a tracing log
         lSQLString := 'INSERT INTO SLADREHANK (' + #13#10 +
           '    DATO,' + #13#10 +
           '    ART,' + #13#10 +
           '    LEVNAVN,' + #13#10 +
+          '    KOSTPR,' + #13#10 +
           '    FARVE_NAVN,' + #13#10 +
           '    STOERRELSE_NAVN,' + #13#10 +
           '    LAENGDE_NAVN,' + #13#10 +
@@ -739,6 +749,7 @@ var
           '    :PDATO,' + #13#10 +
           '    :PART,' + #13#10 +
           '    :PLEVNAVN,' + #13#10 +
+          '    :PKOSTPR,' + #13#10 +
           '    :PFARVE_NAVN,' + #13#10 +
           '    :PSTOERRELSE_NAVN,' + #13#10 +
           '    :PLAENGDE_NAVN,' + #13#10 +
@@ -754,17 +765,18 @@ var
         qUpdateCostprice.ParamByName('PDATO').AsDateTime := lRegulationTime;
         qUpdateCostprice.ParamByName('PART').AsInteger := 209;
         qUpdateCostprice.ParamByName('PLEVNAVN').AsString := '';
+        qUpdateCostprice.ParamByName('PKOSTPR').AsFloat := aCostprice;
         qUpdateCostprice.ParamByName('PFARVE_NAVN').AsString := qFetchVariant.FieldByName('FARVE_NAVN').AsString;
         qUpdateCostprice.ParamByName('PSTOERRELSE_NAVN').AsString := qFetchVariant.FieldByName('STOERRELSE_NAVN').AsString;
         qUpdateCostprice.ParamByName('PLAENGDE_NAVN').AsString := qFetchVariant.FieldByName('LAENGDE_NAVN').AsString;
         qUpdateCostprice.ParamByName('PEKSPEDIENT').AsInteger := 60999;
         qUpdateCostprice.ParamByName('PVAREFRVSTRNR').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
-        qUpdateCostprice.ParamByName('PVAREGRPID').AsString :=
-          FormatFloat('#,#0.00', qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat) + ' > ' +
+        qUpdateCostprice.ParamByName('PVAREGRPID').AsString := FormatFloat('#,#0.00', qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat) + ' > ' +
           FormatFloat('#,#0.00', aCostprice);
-        qUpdateCostprice.ParamByName('PBONTEXT').AsString := Format('Costprice set in all department from value (%s) in Business Central', [FormatFloat('#,#0.00', aCostprice)]);
+        qUpdateCostprice.ParamByName('PBONTEXT').AsString := 'Kostpris ændret på variant via Business Central';
         qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
         qUpdateCostprice.ParamByName('PUAFD_NAVN').AsString := '';
+        qUpdateCostprice.SQL.SaveToFile(SQLLogFileFolder + 'InsertTracingLog.SQL');
         qUpdateCostprice.ExecSQL;
       end;
 
@@ -810,20 +822,32 @@ var
         begin
           qFetchVariant.ParamByName('PV509INDEX').AsString := aBarcode;
           qFetchVariant.ParamByName('PAFDELING_ID').AsString := qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString;
+          qFetchVariant.SQL.SaveToFile(SQLLogFileFolder + 'FecthVariantInDepartment.SQL');
           qFetchVariant.Open;
 
-          if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+          //Costprice from EP is in the departments currency - From BC its DKK
+          if (FormatFloat('#,#0',(qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat * qDepartmentsAndCurrency.FieldByName('KURS').AsFloat / 100)) = FormatFloat('#,#0',aCostprice)) then
           begin
-            DoRemoveStock;
-          end;
-
-          DoSetCostPrice(aBarcode, qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString, (aCostprice / qDepartmentsAndCurrency.FieldByName('KURS').AsFloat * 100));
-
-          if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+            //If cost price with decimals are the same - skip
+            AddToLog(Format('  Costprice from Business Central is %s on variant %s which is the same in EasyPOS department %s. Skipping',
+              [FormatFloat('#,#0',aCostprice),
+              aBarcode,
+              qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString]));
+          end
+          else
           begin
-            DoSetStock;
-          end;
+            if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+            begin
+              DoRemoveStock;
+            end;
 
+            DoSetCostPrice(aBarcode, qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString, (aCostprice / qDepartmentsAndCurrency.FieldByName('KURS').AsFloat * 100));
+
+            if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+            begin
+              DoSetStock;
+            end;
+          end;
           qFetchVariant.Close;
           qDepartmentsAndCurrency.Next;
         end;
@@ -859,7 +883,8 @@ var
     end;
 
   begin
-    AddToLog(Format('  Checking head item %s in Business Central', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
+    AddToLog(Format('Checking head item %s in Business Central. Item in this cycle: %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString,
+      lNumberOfCostpriceUpdates.ToString]));
     lBusinessCentralSetup.FilterValue := BuildFilterString;
     AddToLog(Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]));
     // Mine order værdier.-
@@ -883,15 +908,33 @@ var
         // Itereate through all returned variants
         for var lkmCostprice in (lGetResponse as TkmCostprices).Value do
         begin
-          if DoContinue then
-            // Update headitem and varaints in all departments with new cost price
-            DoContinue := UpdateCostpriceOnAllVariantInAllDepartments(lkmCostprice.VareId, lkmCostprice.UnitCost);
+          if (lkmCostprice.UnitCost = 0) then
+          begin
+            // If costprice from BC is 0 - skip
+            DoContinue := TRUE;
+            AddToLog(Format('  Costprice from Business Central is %s on variant %s. Skipping', [lkmCostprice.UnitCost.ToString, lkmCostprice.VareId]));
+          end
+          else
+          begin
+            if DoContinue then
+              // Update headitem and varaints in all departments with new cost price
+              DoContinue := UpdateCostpriceOnAllVariantInAllDepartments(lkmCostprice.VareId, lkmCostprice.UnitCost);
+          end;
         end;
-        // Mark header as done
-        MarkHeadItemAsDone;
-        // Commit
-        if (trUpdateCostprice.Active) then
-          trUpdateCostprice.Commit;
+        // Mark header as done if all went well.
+        if DoContinue then
+        begin
+          MarkHeadItemAsDone;
+          // Commit
+          if (trUpdateCostprice.Active) then
+            trUpdateCostprice.Commit;
+        end
+        else
+        begin
+          // Commit
+          if (trUpdateCostprice.Active) then
+            trUpdateCostprice.Rollback;
+        end;
         Result := DoContinue;
       end
       else
@@ -905,7 +948,7 @@ var
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
       lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
-        '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+        '  EasyPOS Head item numbmer: ' + QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString + #13#10 +
         '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
         '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
         '  JSON: ' + lJSONStr + #13#10;
@@ -949,10 +992,13 @@ begin
 
           if QFetchItemsUpdateCostprice.RecordCount > 0 then
           begin
+            NumberOfItemsToHandle := iniFile.ReadInteger('Costprice', 'Items to handle per cycle', 50);
+            AddToLog(Format('  Handling %s items per cycle.', [NumberOfItemsToHandle.ToString]));
+
             // At least 1 record is there
             lNumberOfCostpriceUpdates := 0;
             RoutineCanceled := FALSE;
-            While (Not(QFetchItemsUpdateCostprice.Eof)) AND (NOT(RoutineCanceled)) AND (lNumberOfCostpriceUpdates < 100) do
+            While (Not(QFetchItemsUpdateCostprice.Eof)) AND (NOT(RoutineCanceled)) AND (lNumberOfCostpriceUpdates < NumberOfItemsToHandle) do
             begin
               INC(lNumberOfCostpriceUpdates);
               RoutineCanceled := NOT UpdateCostpriceOnItemInEasyPOS;
@@ -1012,6 +1058,16 @@ begin
         EVENTLOG_ERROR_TYPE, 3599, 1);
       if (tnMain.Active) then
         tnMain.Rollback;
+      if Assigned(lBusinessCentral) then
+      begin
+        AddToLog('  TBusinessCentral - Free');
+        FReeAndNil(lBusinessCentral);
+      end;
+      if Assigned(lBusinessCentralSetup) then
+      begin
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
+      end;
     end;
   end;
   AddToLog('DoSyncCostPriceFromBusinessCentral - END');

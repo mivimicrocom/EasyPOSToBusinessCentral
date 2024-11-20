@@ -25,9 +25,9 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = tsProgram
+    ActivePage = TabSheet10
     Align = alClient
-    TabIndex = 0
+    TabIndex = 9
     TabOrder = 0
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -456,50 +456,61 @@ object frmMain: TfrmMain
     end
     object TabSheet3: TRzTabSheet
       Caption = 'Syncronize'
+      ExplicitLeft = 2
+      ExplicitTop = 23
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 108
-        Height = 17
+        Width = 112
+        Height = 19
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
       end
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
-        Top = 74
-        Width = 166
-        Height = 17
+        Top = 75
+        Width = 170
+        Height = 19
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
       end
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
-        Top = 116
-        Width = 171
-        Height = 17
+        Top = 119
+        Width = 175
+        Height = 19
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
       end
       object cbSyncMovements: TRzCheckBox
         Left = 16
-        Top = 158
-        Width = 204
-        Height = 17
+        Top = 162
+        Width = 208
+        Height = 19
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
       end
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
-        Top = 200
-        Width = 231
-        Height = 17
+        Top = 206
+        Width = 235
+        Height = 19
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
+      end
+      object cbSyncCostpriceToEasyPOS: TRzCheckBox
+        Left = 16
+        Top = 250
+        Width = 316
+        Height = 19
+        Caption = 'Syncronize costprices from Business Central to EasyPOS'
+        State = cbUnchecked
+        TabOrder = 5
       end
     end
     object tsItems: TRzTabSheet
@@ -840,6 +851,27 @@ object frmMain: TfrmMain
         Enabled = False
         ReadOnly = True
         TabOrder = 2
+      end
+    end
+    object TabSheet10: TRzTabSheet
+      Caption = 'Costprice from Business Central'
+      ExplicitLeft = -15
+      ExplicitTop = 23
+      object RzLabel42: TRzLabel
+        Left = 40
+        Top = 50
+        Width = 257
+        Height = 15
+        Caption = 'How many items should be handled in one cycle'
+      end
+      object edNumberofUtemsToUpdateCostprice: TRzNumericEdit
+        Left = 40
+        Top = 71
+        Width = 65
+        Height = 23
+        Hint = 'Enter how many items should be handled in a cycle. '
+        TabOrder = 0
+        DisplayFormat = ',0;(,0)'
       end
     end
     object tsGeneralLog: TRzTabSheet

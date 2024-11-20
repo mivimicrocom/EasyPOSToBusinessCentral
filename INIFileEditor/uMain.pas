@@ -145,6 +145,10 @@ type
     cbHvertMinut: TCheckBox;
     edEnvironment: TRzEdit;
     RzLabel41: TRzLabel;
+    cbSyncCostpriceToEasyPOS: TRzCheckBox;
+    TabSheet10: TRzTabSheet;
+    RzLabel42: TRzLabel;
+    edNumberofUtemsToUpdateCostprice: TRzNumericEdit;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -223,6 +227,7 @@ begin
   cbSyncSalesTrans.Checked := FiniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
   cbSyncMovements.Checked := FiniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
   cbSyncStockRegulations.Checked := FiniFile.ReadBool('SYNCRONIZE', 'StockRegulationsTransactions', FALSE);
+  cbSyncCostpriceToEasyPOS.Checked := FiniFile.ReadBool('SYNCRONIZE', 'Costprice from BC', FALSE);
 
   edItemsDAys.Text := FiniFile.ReadString('ITEMS', 'Days to look for records', '5');
   edItemsDeparetment.Text := FiniFile.ReadString('ITEMS', 'Department', '');
@@ -244,6 +249,8 @@ begin
   edStockRegulationTransactionsDays.Text := FiniFile.ReadString('StockRegulation', 'Days to look for records', '5');
   edStockRegulationTransactionsLastRun.Text := FiniFile.ReadString('StockRegulation', 'Last run', '');
   edStockRegulationTransactionsLastTry.Text := FiniFile.ReadString('StockRegulation', 'Last time sync to BC was tried', '');
+
+  edNumberofUtemsToUpdateCostprice.Text := FiniFile.ReadString('Costprice', 'Items to handle per cycle', '50');
 end;
 
 procedure TfrmMain.TabSheet5Show(Sender: TObject);
@@ -382,6 +389,7 @@ begin
   FiniFile.WriteBool('SYNCRONIZE', 'SalesTransactions', cbSyncSalesTrans.Checked);
   FiniFile.WriteBool('SYNCRONIZE', 'MovementsTransactions', cbSyncMovements.Checked);
   FiniFile.WriteBool('SYNCRONIZE', 'StockRegulationsTransactions', cbSyncStockRegulations.Checked);
+  FiniFile.WriteBool('SYNCRONIZE', 'Costprice from BC', cbSyncCostpriceToEasyPOS.Checked);
 
   FiniFile.WriteString('ITEMS', 'Days to look for records', edItemsDAys.Text);
   FiniFile.WriteString('ITEMS', 'Department', edItemsDeparetment.Text);
@@ -403,6 +411,9 @@ begin
   FiniFile.WriteString('StockRegulation', 'Days to look for records', edStockRegulationTransactionsDays.Text);
   FiniFile.WriteString('StockRegulation', 'Last run', edStockRegulationTransactionsLastRun.Text);
   FiniFile.WriteString('StockRegulation', 'Last time sync to BC was tried', edStockRegulationTransactionsLastTry.Text);
+
+  FiniFile.WriteString('Costprice', 'Items to handle per cycle', edNumberofUtemsToUpdateCostprice.Text);
+
 end;
 
 procedure TfrmMain.FormClose(Sender: TObject; var Action: TCloseAction);
