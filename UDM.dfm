@@ -740,4 +740,98 @@ object DM: TDM
     Left = 208
     Top = 666
   end
+  object QFetchItemsUpdateCostprice: TFDQuery
+    Connection = dbMain
+    Transaction = tnMain
+    SQL.Strings = (
+      'SELECT'
+      '    V.PLU_NR'
+      'FROM VARER V'
+      'WHERE'
+      '    V.UPDATE_FROM_BC > 0'
+      'ORDER BY'
+      '    V.PLU_NR DESC  ')
+    Left = 280
+    Top = 344
+  end
+  object trUpdateCostprice: TFDTransaction
+    Options.Isolation = xiReadCommitted
+    Options.AutoStart = False
+    Options.AutoStop = False
+    Options.StopOptions = [xoIfCmdsInactive]
+    Connection = dbMain
+    Left = 496
+    Top = 146
+  end
+  object qUpdateCostprice: TFDQuery
+    Connection = dbMain
+    Transaction = trUpdateCostprice
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 544
+    Top = 231
+  end
+  object qDepartmentsAndCurrency: TFDQuery
+    Connection = dbMain
+    Transaction = trUpdateCostprice
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    SQL.Strings = (
+      'SELECT'
+      '    AFDELING.AFDELINGSNUMMER,'
+      '    STAMDATA_PRG_EXT.STDVALUTA,'
+      '    VALUTA.TEKST,'
+      '    VALUTALINIER.KURS'
+      'FROM AFDELING'
+      '    INNER JOIN STAMDATA_PRG_EXT ON'
+      
+        '          STAMDATA_PRG_EXT.AFDELING_ID = AFDELING.AFDELINGSNUMME' +
+        'R'
+      '    INNER JOIN VALUTA ON'
+      '          VALUTA.TEKST = STAMDATA_PRG_EXT.STDVALUTA'
+      '    INNER JOIN VALUTALINIER ON'
+      '          VALUTALINIER.VALUTA_TEKST = VALUTA.TEKST'
+      'ORDER BY'
+      '    AFDELING.AFDELINGSNUMMER ASC  ')
+    Left = 656
+    Top = 135
+  end
+  object qFetchVariant: TFDQuery
+    Connection = dbMain
+    Transaction = trUpdateCostprice
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    SQL.Strings = (
+      'SELECT'
+      '    VAREFRVSTR_DETAIL.ANTALSTK,'
+      '    VAREFRVSTR_DETAIL.FARVE_NAVN,'
+      '    VAREFRVSTR_DETAIL.LAENGDE_NAVN,'
+      '    VAREFRVSTR_DETAIL.STOERRELSE_NAVN,'
+      '    VAREFRVSTR_DETAIL.BEH_KOSTPRIS,'
+      '    VAREFRVSTR_DETAIL.SALGSPRISSTK,'
+      '    VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK'
+      'FROM VAREFRVSTR_DETAIL'
+      'WHERE'
+      '    VAREFRVSTR_DETAIL.V509INDEX = :PV509INDEX'
+      '    AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID   ')
+    Left = 648
+    Top = 215
+    ParamData = <
+      item
+        Name = 'PV509INDEX'
+        ParamType = ptInput
+      end
+      item
+        Name = 'PAFDELING_ID'
+        ParamType = ptInput
+      end>
+  end
+  object qDoRegulation: TFDQuery
+    Connection = dbMain
+    Transaction = trUpdateCostprice
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 480
+    Top = 303
+  end
 end

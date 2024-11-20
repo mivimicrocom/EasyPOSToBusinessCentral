@@ -70,6 +70,12 @@ type
     trSetEksportedValueOnStockTrans: TFDTransaction;
     QSetEksportedValueOnFinancialTrans: TFDQuery;
     trSetEksportedValueOnFinancialTrans: TFDTransaction;
+    QFetchItemsUpdateCostprice: TFDQuery;
+    trUpdateCostprice: TFDTransaction;
+    qUpdateCostprice: TFDQuery;
+    qDepartmentsAndCurrency: TFDQuery;
+    qFetchVariant: TFDQuery;
+    qDoRegulation: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -106,12 +112,13 @@ type
     procedure DoSyncronizeItems;
     procedure DoSyncronizeMovemmentsTransaction;
     procedure DoSyncronizeSalesTransactions;
+    procedure DoSyncCostPriceFromBusinessCentral;
     function FetchBCSettings: Boolean;
     Function FetchNextTransID(aTransactionIDUSedFor: String): Integer;
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
     procedure InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDateTime; aTransID: Integer);
-//    procedure DoSyncronizeStockRegulationTransaction;
+    // procedure DoSyncronizeStockRegulationTransaction;
   public
     { Public declarations }
     iniFile: TIniFile;
@@ -134,7 +141,8 @@ uses
   MVCFramework.Serializer.Commons,
   MVCFramework.Serializer.JsonDataObjects,
   uBusinessCentralIntegration,
-  uSendEMail;
+  uSendEMail,
+  uEventLogger;
 
 const
   NumberOfDays = 21;
@@ -484,7 +492,7 @@ begin
   AddToLog(Format('    Transaction ID: %d.', [Result]))
 {$ENDIF}
 {$IFDEF RELEASE}
-  AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
+    AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
@@ -615,6 +623,400 @@ begin
   AddToLog('  ');
 end;
 
+procedure TDM.DoSyncCostPriceFromBusinessCentral;
+const
+  lUpdateCostpriceErrorFileName: String = 'UpdateCostpriceErrors.txt';
+var
+  lBusinessCentralSetup: TBusinessCentralSetup;
+  lBusinessCentral: TBusinessCentral;
+  RoutineCanceled: Boolean;
+  lText: string;
+  lNumberOfCostpriceUpdates: Integer;
+
+  function UpdateCostpriceOnItemInEasyPOS: Boolean;
+  var
+    DoContinueWithInsert: Boolean;
+    lGetResponse: TBusinessCentral_Response;
+    lErrotString: string;
+    lJSONStr: string;
+    DoContinue: Boolean;
+    lRegulationTime: TDateTime;
+
+    function BuildFilterString: string;
+    var
+      QueryString: TStringBuilder;
+      VareId: string;
+    begin
+      // Initialiser TStringBuilder
+      QueryString := TStringBuilder.Create;
+      try
+        // Gennemløb MyQuery og byg strengen
+        QItemsTemp.SQL.Clear;
+        QItemsTemp.SQL.Add('Select vv.v509index from varefrvstr vv where vv.vareplu_id = :Pvareplu_id');
+        QItemsTemp.ParamByName('Pvareplu_id').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
+        QItemsTemp.Open;
+
+        QItemsTemp.First; // Start ved den første record
+        while not QItemsTemp.Eof do
+        begin
+          VareId := QItemsTemp.FieldByName('v509index').AsString;
+          // Tilføj 'VareId eq '...' til builderen
+          QueryString.AppendFormat('VareId eq ''%s''', [VareId]);
+          QItemsTemp.Next;
+          if (not(QItemsTemp.Eof)) then
+            QueryString.Append(' or ');
+        end;
+
+        // Not head item - have a cost price in BC of 0
+        // QueryString.AppendFormat('VareId eq ''%s''', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]);
+
+        QItemsTemp.Close;
+
+        Result := QueryString.ToString;
+      finally
+        QueryString.Free; // Frigør ressourcer
+      end;
+    end;
+
+    function UpdateCostpriceOnAllVariantInAllDepartments(aBarcode: string; aCostprice: Double): Boolean;
+    var
+      glFormatSettings: TFormatSettings;
+
+      procedure DoRemoveStock;
+      var
+        lSQLString: string;
+      begin
+        // Lets remove all stock from this variant in this department to cost price on variant.
+        lSQLString := Format('Select * from p_stockregulate(''%s'', ''%s'', ''%s'', %d, ''%s'', %d, %n, %n, %n, ''%s'', ''%s'')',
+          [aBarcode,
+          qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString,
+          '',
+          60999,
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lRegulationTime),
+          10000000 + TRUNC(lRegulationTime),
+          qFetchVariant.FieldByName('AntalStk').AsFloat * -1,
+          qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat,
+          qFetchVariant.FieldByName('SalgsPrisStk').AsFloat,
+          'Removing stock to regulate costprice',
+          'regulate'], glFormatSettings);
+        AddToLog(Format('  Remove stock: SQL: %s', [lSQLString]));
+        qDoRegulation.Open(lSQLString, []);
+      end;
+
+      procedure DoSetCostPrice(aBarcode: string; aDepartment: string; aCostprice: Double);
+      var
+        lSQLString: string;
+      begin
+        // Lets set a new cost price on this variant in this department.
+        AddToLog(Format('  Set costprice to %s on variant %s in department %s', [aCostprice.ToString, aBarcode, aDepartment]));
+        lSQLString := 'UPDATE VAREFRVSTR_DETAIL SET' + #13#10 +
+          '  VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK = :PVEJETKOSTPRISSTK ' + #13#10 +
+          'WHERE' + #13#10 +
+          '  VAREFRVSTR_DETAIL.V509INDEX = :PV509INDEX ' + #13#10 +
+          '  AND VAREFRVSTR_DETAIL.AFDELING_ID = :PAFDELING_ID ';
+        qUpdateCostprice.SQL.Clear;
+        qUpdateCostprice.SQL.Add(lSQLString);
+        qUpdateCostprice.ParamByName('PVEJETKOSTPRISSTK').AsFloat := aCostprice;
+        qUpdateCostprice.ParamByName('PV509INDEX').AsString := aBarcode;
+        qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
+        qUpdateCostprice.ExecSQL;
+
+        lSQLString := 'INSERT INTO SLADREHANK (' + #13#10 +
+          '    DATO,' + #13#10 +
+          '    ART,' + #13#10 +
+          '    LEVNAVN,' + #13#10 +
+          '    FARVE_NAVN,' + #13#10 +
+          '    STOERRELSE_NAVN,' + #13#10 +
+          '    LAENGDE_NAVN,' + #13#10 +
+          '    EKSPEDIENT,' + #13#10 +
+          '    VAREFRVSTRNR,' + #13#10 +
+          '    VAREGRPID,' + #13#10 +
+          '    BONTEXT,' + #13#10 +
+          '    AFDELING_ID,' + #13#10 +
+          '    UAFD_NAVN,' + #13#10 +
+          '    UAFD_GRP_NAVN)' + #13#10 +
+          'VALUES (' + #13#10 +
+          '    :PDATO,' + #13#10 +
+          '    :PART,' + #13#10 +
+          '    :PLEVNAVN,' + #13#10 +
+          '    :PFARVE_NAVN,' + #13#10 +
+          '    :PSTOERRELSE_NAVN,' + #13#10 +
+          '    :PLAENGDE_NAVN,' + #13#10 +
+          '    :PEKSPEDIENT,' + #13#10 +
+          '    :PVAREFRVSTRNR,' + #13#10 +
+          '    :PVAREGRPID,' + #13#10 +
+          '    :PBONTEXT,' + #13#10 +
+          '    :PAFDELING_ID,' + #13#10 +
+          '    :PUAFD_NAVN,' + #13#10 +
+          '    ''Alle undergrupper'');';
+        qUpdateCostprice.SQL.Clear;
+        qUpdateCostprice.SQL.Add(lSQLString);
+        qUpdateCostprice.ParamByName('PDATO').AsDateTime := lRegulationTime;
+        qUpdateCostprice.ParamByName('PART').AsInteger := 209;
+        qUpdateCostprice.ParamByName('PLEVNAVN').AsString := '';
+        qUpdateCostprice.ParamByName('PFARVE_NAVN').AsString := qFetchVariant.FieldByName('FARVE_NAVN').AsString;
+        qUpdateCostprice.ParamByName('PSTOERRELSE_NAVN').AsString := qFetchVariant.FieldByName('STOERRELSE_NAVN').AsString;
+        qUpdateCostprice.ParamByName('PLAENGDE_NAVN').AsString := qFetchVariant.FieldByName('LAENGDE_NAVN').AsString;
+        qUpdateCostprice.ParamByName('PEKSPEDIENT').AsInteger := 60999;
+        qUpdateCostprice.ParamByName('PVAREFRVSTRNR').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
+        qUpdateCostprice.ParamByName('PVAREGRPID').AsString :=
+          FormatFloat('#,#0.00', qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat) + ' > ' +
+          FormatFloat('#,#0.00', aCostprice);
+        qUpdateCostprice.ParamByName('PBONTEXT').AsString := Format('Costprice set in all department from value (%s) in Business Central', [FormatFloat('#,#0.00', aCostprice)]);
+        qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
+        qUpdateCostprice.ParamByName('PUAFD_NAVN').AsString := '';
+        qUpdateCostprice.ExecSQL;
+      end;
+
+      procedure DoSetStock;
+      var
+        lSQLString: string;
+      begin
+        // Lets readd all stock from this variant in this department to cost price from Business central
+        lSQLString := Format('Select * from p_stockregulate(''%s'', ''%s'', ''%s'', %d, ''%s'', %d, %n, %n, %n, ''%s'', ''%s'')',
+          [aBarcode,
+          qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString,
+          '',
+          60999,
+          FormatDateTime('yyyy-mm-dd hh:mm:ss', lRegulationTime),
+          11000000 + TRUNC(lRegulationTime),
+          qFetchVariant.FieldByName('AntalStk').AsFloat,
+          aCostprice,
+          qFetchVariant.FieldByName('SalgsPrisStk').AsFloat,
+          'Adding stock to regulate costprice',
+          'regulate'], glFormatSettings);
+        AddToLog(Format('  Adding stock: SQL: %s', [lSQLString]));
+        qDoRegulation.Open(lSQLString, []);
+      end;
+
+    begin
+      (*
+        Start transactions
+        Gennemløb alle afdelinger
+        Hent variant, beholdning og kostpris.
+        Trræk alt ud
+        Sæt kostpris
+        Læg alt på lager igen til ny kostpris
+        Commit
+      *)
+      try
+        glFormatSettings := TFormatSettings.Create;
+        glFormatSettings.ThousandSeparator := #0;
+        glFormatSettings.DecimalSeparator := '.';
+
+        AddToLog(Format('Variant %s', [aBarcode]));
+        qDepartmentsAndCurrency.Open;
+        while (not(qDepartmentsAndCurrency.Eof)) do
+        begin
+          qFetchVariant.ParamByName('PV509INDEX').AsString := aBarcode;
+          qFetchVariant.ParamByName('PAFDELING_ID').AsString := qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString;
+          qFetchVariant.Open;
+
+          if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+          begin
+            DoRemoveStock;
+          end;
+
+          DoSetCostPrice(aBarcode, qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString, (aCostprice / qDepartmentsAndCurrency.FieldByName('KURS').AsFloat * 100));
+
+          if qFetchVariant.FieldByName('AntalStk').AsFloat <> 0 then
+          begin
+            DoSetStock;
+          end;
+
+          qFetchVariant.Close;
+          qDepartmentsAndCurrency.Next;
+        end;
+        qDepartmentsAndCurrency.Close;
+        Result := TRUE;
+      except
+        On E: Exception do
+        begin
+          Result := FALSE;
+          if (trUpdateCostprice.Active) then
+            trUpdateCostprice.Rollback;
+          AddToLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]));
+          WriteEventLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central',
+            EVENTLOG_ERROR_TYPE, 3599, 1);
+          if (tnMain.Active) then
+            tnMain.Rollback;
+        end;
+      end;
+    end;
+
+    procedure MarkHeadItemAsDone;
+    var
+      lSQLString: string;
+    begin
+      lSQLString := 'UPDATE VARER SET' + #13#10 +
+        '  VARER.UPDATE_FROM_BC = 0 ' + #13#10 +
+        'WHERE' + #13#10 +
+        '  VARER.PLU_NR = :PPLU_NR ';
+      qUpdateCostprice.SQL.Clear;
+      qUpdateCostprice.SQL.Add(lSQLString);
+      qUpdateCostprice.ParamByName('PPLU_NR').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
+      qUpdateCostprice.ExecSQL;
+    end;
+
+  begin
+    AddToLog(Format('  Checking head item %s in Business Central', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
+    lBusinessCentralSetup.FilterValue := BuildFilterString;
+    AddToLog(Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]));
+    // Mine order værdier.-
+    lBusinessCentralSetup.OrderValue := '';
+    // Select fields
+    lBusinessCentralSetup.SelectValue := '';
+    // Hent dem kostpriser til hovedvaren.
+    DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
+
+    if DoContinueWithInsert then
+    begin
+      if (lGetResponse as TkmCostprices).Value.Count > 0 then
+      begin
+        // We have fetched some records. BArcode and Costprice (In DKK)
+        // Time of handling this head item.
+        lRegulationTime := NOW;
+        DoContinue := TRUE;
+        // Start transaction
+        if (not(trUpdateCostprice.Active)) then
+          trUpdateCostprice.StartTransaction;
+        // Itereate through all returned variants
+        for var lkmCostprice in (lGetResponse as TkmCostprices).Value do
+        begin
+          if DoContinue then
+            // Update headitem and varaints in all departments with new cost price
+            DoContinue := UpdateCostpriceOnAllVariantInAllDepartments(lkmCostprice.VareId, lkmCostprice.UnitCost);
+        end;
+        // Mark header as done
+        MarkHeadItemAsDone;
+        // Commit
+        if (trUpdateCostprice.Active) then
+          trUpdateCostprice.Commit;
+        Result := DoContinue;
+      end
+      else
+      begin
+        AddToLog(Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
+        Result := TRUE;
+      end;
+    end
+    else
+    begin
+      // Do not continue. Some error from BC when trying to get a record
+      Result := FALSE;
+      lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
+        '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
+        '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+        '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+        '  JSON: ' + lJSONStr + #13#10;
+      AddToLog(lErrotString);
+      AddToErrorLog(lErrotString, lUpdateCostpriceErrorFileName);
+      WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3503, 1);
+    end;
+    FReeAndNil(lGetResponse);
+  end;
+
+begin
+  AddToLog('DoSyncCostPriceFromBusinessCentral - BEGIN');
+  try
+    if (ConnectToDB) then
+    begin
+      AddToLog('  TBusinessCentralSetup.Create');
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+        LF_BC_PORT_Str,
+        LF_BC_COMPANY_URL,
+        LF_BC_ACTIVECOMPANYID,
+        LF_BC_Environment,
+        LF_BC_USERNAME,
+        LF_BC_PASSWORD,
+        LF_BC_Version);
+      try
+        AddToLog('  TBusinessCentral.Create');
+        lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+        try
+          if (NOT(tnMain.Active)) then
+            tnMain.StartTransaction;
+
+          // Log
+          AddToLog(Format('  Fetching items from EasyPOS marked to get costprice update.', []));
+
+          // Fetch items which are marked as Update costprice from Business Central
+          QFetchItemsUpdateCostprice.SQL.SaveToFile(SQLLogFileFolder + 'ItemsUpdateCostprice.SQL');
+          QFetchItemsUpdateCostprice.Open;
+
+          // Log
+          AddToLog(Format('  Query opened', []));
+
+          if QFetchItemsUpdateCostprice.RecordCount > 0 then
+          begin
+            // At least 1 record is there
+            lNumberOfCostpriceUpdates := 0;
+            RoutineCanceled := FALSE;
+            While (Not(QFetchItemsUpdateCostprice.Eof)) AND (NOT(RoutineCanceled)) AND (lNumberOfCostpriceUpdates < 100) do
+            begin
+              INC(lNumberOfCostpriceUpdates);
+              RoutineCanceled := NOT UpdateCostpriceOnItemInEasyPOS;
+              if NOT RoutineCanceled then
+              begin
+                QFetchItemsUpdateCostprice.Next;
+              end;
+            end;
+            if RoutineCanceled then
+            begin
+              AddToLog('  Iteration done with errors. ');
+            end
+            else
+            begin
+              AddToLog('  Iteration done succesfull');
+            end;
+
+            QFetchItemsUpdateCostprice.Close;
+            if (tnMain.Active) then
+              tnMain.Commit;
+
+            if (NOT(RoutineCanceled)) then
+            begin
+            end
+            else
+            begin
+              // Some error
+              lText := 'Der skete en fejl ved synkronisering af kostpriser fra Business Central.';
+              if (tnMain.Active) then
+                tnMain.Rollback;
+              AddToLog(lText);
+            end;
+            AddToLog('  Routine done');
+          end
+          else
+          begin
+            if (tnMain.Active) then
+              tnMain.Commit;
+            AddToLog(Format('  No items set for costprice update', []));
+          end;
+        finally
+          AddToLog('  TBusinessCentral - Free');
+          FReeAndNil(lBusinessCentral);
+        end;
+      finally
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
+      end;
+
+      DisconnectFromDB;
+    end;
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]));
+      WriteEventLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central',
+        EVENTLOG_ERROR_TYPE, 3599, 1);
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
+  end;
+  AddToLog('DoSyncCostPriceFromBusinessCentral - END');
+end;
+
 procedure TDM.DoSyncronizeFinansCialRecords;
 const
   lErrorFileName: String = 'FinancialErrors.txt';
@@ -724,6 +1126,7 @@ var
               '  Message: ' + E.Message;
             AddToLog(lErrotString);
             AddToErrorLog(lErrotString, lErrorFileName);
+            WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3402, 1);
           end;
         end;
 {$ENDIF}
@@ -927,7 +1330,6 @@ var
           DoContinue := TRUE;
           AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
 {$ENDIF}
-
           if DoContinue then
           begin
             iniFile.WriteDateTime('FinancialRecords', 'Last run', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
@@ -968,125 +1370,136 @@ var
         '  JSON: ' + lJSONStr + #13#10;
       AddToLog(lErrotString);
       AddToErrorLog(lErrotString, lErrorFileName);
+      WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3403, 1);
     end;
     FReeAndNil(lGetResponse);
   end;
 
 begin
   AddToLog('DoSyncronizeFinansCialRecords - BEGIN');
-  if (ConnectToDB) then
-  begin
-    AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT_Str,
-      LF_BC_COMPANY_URL,
-      LF_BC_ACTIVECOMPANYID,
-      LF_BC_Environment,
-      LF_BC_USERNAME,
-      LF_BC_PASSWORD,
-      LF_BC_Version);
-    try
-      AddToLog('  TBusinessCentral.Create');
-      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+  try
+    if (ConnectToDB) then
+    begin
+      AddToLog('  TBusinessCentralSetup.Create');
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+        LF_BC_PORT_Str,
+        LF_BC_COMPANY_URL,
+        LF_BC_ACTIVECOMPANYID,
+        LF_BC_Environment,
+        LF_BC_USERNAME,
+        LF_BC_PASSWORD,
+        LF_BC_Version);
       try
-        if (NOT(tnMain.Active)) then
-          tnMain.StartTransaction;
+        AddToLog('  TBusinessCentral.Create');
+        lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+        try
+          if (NOT(tnMain.Active)) then
+            tnMain.StartTransaction;
 
-        lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
-//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
-        AddToLog(Format('Days to look for records which are not yet transferred:  %s', [lDaysToLookAfterRecords.ToString]));
-        lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
-//        lFromDateAndTime := lDateAndTimeOfLastRun;
-        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
-        lToDateAndTime := NOW;
+          lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
+          // AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+          AddToLog(Format('Days to look for records which are not yet transferred:  %s', [lDaysToLookAfterRecords.ToString]));
+          lDateAndTimeOfLastRun := iniFile.ReadDateTime('FinancialRecords', 'Last run', NOW - lDaysToLookAfterRecords);
+          // lFromDateAndTime := lDateAndTimeOfLastRun;
+          lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
+          lToDateAndTime := NOW;
 
-        AddToLog(Format('  Fetching records. Period %s to %s',
-          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
-          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+          AddToLog(Format('  Fetching records. Period %s to %s',
+            [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+            FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
-        // Needs to be fetched in ascending date order
-        QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
-        QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
-        QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder + 'FinancialRecords.SQL');
-        QFetchFinancialRecords.Open;
+          // Needs to be fetched in ascending date order
+          QFetchFinancialRecords.ParamByName('PStartDato').AsDateTime := lFromDateAndTime;
+          QFetchFinancialRecords.ParamByName('PSlutDato').AsDateTime := lToDateAndTime;
+          QFetchFinancialRecords.SQL.SaveToFile(SQLLogFileFolder + 'FinancialRecords.SQL');
+          QFetchFinancialRecords.Open;
 
-        lExportCounter := 0;
-        lErrorCounter := 0;
+          lExportCounter := 0;
+          lErrorCounter := 0;
 
-        if (NOT(QFetchFinancialRecords.EOF)) then
-        begin
-          // At least 1 record is there - fetch next transactions UD
-          BC_TransactionID := FetchNextTransID('financial records');
-          RoutineCanceled := FALSE;
-          // Iterate through result set
-          while (NOT(QFetchFinancialRecords.EOF)) AND (NOT(RoutineCanceled)) do
+          if (NOT(QFetchFinancialRecords.Eof)) then
           begin
-            RoutineCanceled := NOT CreateAndExportFinancialRecord;
-            if NOT RoutineCanceled then
+            // At least 1 record is there - fetch next transactions UD
+            BC_TransactionID := FetchNextTransID('financial records');
+            RoutineCanceled := FALSE;
+            // Iterate through result set
+            while (NOT(QFetchFinancialRecords.Eof)) AND (NOT(RoutineCanceled)) do
             begin
-              // save highest TransID of record
-              QFetchFinancialRecords.Next;
+              RoutineCanceled := NOT CreateAndExportFinancialRecord;
+              if NOT RoutineCanceled then
+              begin
+                // save highest TransID of record
+                QFetchFinancialRecords.Next;
+              end;
             end;
-          end;
-          AddToLog('  Iteration done');
+            AddToLog('  Iteration done');
 
-          // Lets set a date for the last time we were in this routine
-          iniFile.WriteDateTime('FinancialRecords', 'Last time sync to BC was tried', NOW);
-          if (NOT(RoutineCanceled)) then
-          begin
-            /// All good
-            if NOT OnlyTestRoutine then
+            // Lets set a date for the last time we were in this routine
+            iniFile.WriteDateTime('FinancialRecords', 'Last time sync to BC was tried', NOW);
+            if (NOT(RoutineCanceled)) then
             begin
+              /// All good
+              if NOT OnlyTestRoutine then
+              begin
+                QFetchFinancialRecords.Close;
+                if (tnMain.Active) then
+                  tnMain.Commit;
+
+                // This is now set after each succesful transfer of a record
+                // iniFile.WriteDateTime('FinancialRecords', 'Last run', lToDateAndTime);
+                InsertTracingLog(15, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              end;
+            end
+            else
+            begin
+              // Some error occured. Send an mail to user
+              // Send mail with file LogFolder + lErrorName
+              // Rename file
+              lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
+                'Vedhæftet er en fil med information' + #13#10;
+              SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
+              // Rename error file
+
+              // Need to close whatever we are doing before inserting tracing record
               QFetchFinancialRecords.Close;
               if (tnMain.Active) then
                 tnMain.Commit;
-
-              // This is now set after each succesful transfer of a record
-              // iniFile.WriteDateTime('FinancialRecords', 'Last run', lToDateAndTime);
-              InsertTracingLog(15, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+              InsertTracingLog(16, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
             end;
+
+            AddToLog('  Routine done');
           end
           else
           begin
-            // Some error occured. Send an mail to user
-            // Send mail with file LogFolder + lErrorName
-            // Rename file
-            lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
-              'Vedhæftet er en fil med information' + #13#10;
-            SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
-            // Rename error file
-
-            // Need to close whatever we are doing before inserting tracing record
-            QFetchFinancialRecords.Close;
-            if (tnMain.Active) then
-              tnMain.Commit;
-            TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Finansposter_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
-            InsertTracingLog(16, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+            // NO records selected
+            AddToLog('  No records');
           end;
 
-          AddToLog('  Routine done');
-        end
-        else
-        begin
-          // NO records selected
-          AddToLog('  No records');
+          QFetchFinancialRecords.Close;
+          if (tnMain.Active) then
+            tnMain.Commit;
+
+        finally
+          AddToLog('  TBusinessCentral - Free');
+          FReeAndNil(lBusinessCentral);
         end;
-
-        QFetchFinancialRecords.Close;
-        if (tnMain.Active) then
-          tnMain.Commit;
-
       finally
-        AddToLog('  TBusinessCentral - Free');
-        FReeAndNil(lBusinessCentral);
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
       end;
-    finally
-      AddToLog('  TBusinessCentralSetup - Free');
-      FReeAndNil(lBusinessCentralSetup);
+
+      DisconnectFromDB;
+
     end;
-
-    DisconnectFromDB;
-
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('DoSyncronizeFinansCialRecords - ERROR. %s', [E.Message]));
+      WriteEventLog(Format('DoSyncronizeFinansCialRecords - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3499, 1);
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
   end;
   AddToLog('DoSyncronizeFinansCialRecords - END');
   AddToLog('  ');
@@ -1130,7 +1543,7 @@ var
       lkmItem := TkmItem.Create;
       try
         lkmItem.transId := BC_ItemsTransactionID;
-        lkmItem.vareId := QFetchItems.FieldByName('VareID').AsString;
+        lkmItem.VareId := QFetchItems.FieldByName('VareID').AsString;
         lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString, 1, 50);
         lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString, 1, 50);
         lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
@@ -1156,7 +1569,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-//        lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
+        // lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
         lkmItem.WEBVare := Bool(QFetchItems.FieldByName('WEBVarer').AsInteger);
 
         // Build JSON string
@@ -1196,6 +1609,7 @@ var
             '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
           // Add to log file.
           AddToErrorLog(lErrorString, lErrorFileName);
+          WriteEventLog(lErrorString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3101, 1);
         end;
         FReeAndNil(lResponse);
       finally
@@ -1209,7 +1623,7 @@ var
       lkmItem := TkmItem.Create;
       try
         lkmItem.transId := BC_ItemsTransactionID;
-        lkmItem.vareId := QFetchItems.FieldByName('VariantID').AsString;
+        lkmItem.VareId := QFetchItems.FieldByName('VariantID').AsString;
         lkmItem.beskrivelse := Copy(QFetchItems.FieldByName('Beskrivelse').AsString, 1, 50);
         lkmItem.model := Copy(QFetchItems.FieldByName('Model').AsString, 1, 50);
         lkmItem.kostPris := QFetchItems.FieldByName('KostPris').AsFloat;
@@ -1274,6 +1688,7 @@ var
             '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10;
           // Add to log file.
           AddToErrorLog(lErrorString, lErrorFileName);
+          WriteEventLog(lErrorString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3102, 1);
         end;
         FReeAndNil(lResponse);
       finally
@@ -1329,7 +1744,7 @@ var
       lkmVariantId := TkmVariantId.Create;
       try
         lkmVariantId.transId := BC_VariantsTransactionID;
-        lkmVariantId.vareId := QFetchItems.FieldByName('VareID').AsString;
+        lkmVariantId.VareId := QFetchItems.FieldByName('VareID').AsString;
         lkmVariantId.variantId := QFetchItems.FieldByName('VariantID').AsString;
         lkmVariantId.Farve := QFetchItems.FieldByName('Farve').AsString;
         lkmVariantId.stRrelse := QFetchItems.FieldByName('Storrelse').AsString;
@@ -1376,6 +1791,7 @@ var
           Afbrudt := TRUE;
           // Add to errorlog
           AddToErrorLog(lErrorString, lErrorFileName);
+          WriteEventLog(lErrorString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3103, 1);
         end;
         FReeAndNil(lResponse);
       finally
@@ -1456,7 +1872,7 @@ begin
 
           AddToLog(Format('  Department: %s ', [lDepartment]));
           AddToLog(Format('  Days to look after records if not last run i in INI file: %s ', [lDaysToLookAfterRecords.ToString]));
-          AddToLog(Format('  Date/time of last run: %s ', [FormatDateTime('dd-mm-yyyy hh:mm:ss',lDateAndTimeOfLastRun)]));
+          AddToLog(Format('  Date/time of last run: %s ', [FormatDateTime('dd-mm-yyyy hh:mm:ss', lDateAndTimeOfLastRun)]));
           AddToLog(Format('  Fetching Items. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime), FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
           QFetchItems.SQL.Clear;
@@ -1631,13 +2047,13 @@ begin
           lCurrentHeadItem := '';
           ContinueWithVariants := TRUE;
 
-          if (NOT(QFetchItems.EOF)) then
+          if (NOT(QFetchItems.Eof)) then
           begin
             // At least 1 record is there - fetch next transactions UD
             BC_ItemsTransactionID := FetchNextTransID('head items');
             BC_VariantsTransactionID := FetchNextTransID('variants');
             // Iterate through result set
-            while (NOT(QFetchItems.EOF)) AND (lErrorCounter = 0) do
+            while (NOT(QFetchItems.Eof)) AND (lErrorCounter = 0) do
             begin
               CreateAndExportItems;
               if (lErrorCounter = 0) then
@@ -1696,6 +2112,7 @@ begin
     on E: Exception do
     begin
       AddToLog(Format('DoSyncronizeItems - ERROR. %s', [E.Message]));
+      WriteEventLog(Format('DoSyncronizeItems - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3199, 1);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
@@ -1763,6 +2180,7 @@ var
               '  Message: ' + E.Message;
             AddToLog(lErrotString);
             AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+            WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3201, 1);
           end;
         end;
 {$ENDIF}
@@ -1795,7 +2213,7 @@ var
           lkmItemSale.transId := BC_TransactionID;
           lkmItemSale.epId := QFetchSalesTransactions.FieldByName('EpID').AsInteger;
           lkmItemSale.bonNummer := QFetchSalesTransactions.FieldByName('Bonnummer').AsInteger;
-          lkmItemSale.vareId := QFetchSalesTransactions.FieldByName('VareID').AsString;
+          lkmItemSale.VareId := QFetchSalesTransactions.FieldByName('VareID').AsString;
           lkmItemSale.variantId := QFetchSalesTransactions.FieldByName('VariantID').AsString;
           lkmItemSale.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
           lkmItemSale.salgstidspunkt := FormatDateTime('hh:mm:ss', QFetchSalesTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
@@ -1852,6 +2270,7 @@ var
               '  JSON: ' + lJSONStr + #13#10;
             AddToLog(lErrotString);
             AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+            WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3202, 1);
           end;
 
           FReeAndNil(lResponse);
@@ -1876,127 +2295,138 @@ var
         '  JSON: ' + lJSONStr + #13#10;
       AddToLog(lErrotString);
       AddToErrorLog(lErrotString, lSalesTransactionErrorFileName);
+      WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3203, 1);
     end;
     FReeAndNil(lGetResponse);
   end;
 
 begin
   AddToLog('DoSyncronizeSalesTransactions - BEGIN');
-  if (ConnectToDB) then
-  begin
-    AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT_Str,
-      LF_BC_COMPANY_URL,
-      LF_BC_ACTIVECOMPANYID,
-      LF_BC_Environment,
-      LF_BC_USERNAME,
-      LF_BC_PASSWORD,
-      LF_BC_Version);
-    try
-      AddToLog('  TBusinessCentral.Create');
-      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+  try
+    if (ConnectToDB) then
+    begin
+      AddToLog('  TBusinessCentralSetup.Create');
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+        LF_BC_PORT_Str,
+        LF_BC_COMPANY_URL,
+        LF_BC_ACTIVECOMPANYID,
+        LF_BC_Environment,
+        LF_BC_USERNAME,
+        LF_BC_PASSWORD,
+        LF_BC_Version);
       try
-        if (NOT(tnMain.Active)) then
-          tnMain.StartTransaction;
+        AddToLog('  TBusinessCentral.Create');
+        lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+        try
+          if (NOT(tnMain.Active)) then
+            tnMain.StartTransaction;
 
-        lDaysToLookAfterRecords := iniFile.ReadInteger('SalesTransaction', 'Days to look for records', 5);
-//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
-        AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
-        // Date of last run
-        lDateAndTimeOfLastRun := iniFile.ReadDateTime('SalesTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
-//        lFromDateAndTime := lDateAndTimeOfLastRun;
-        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
-        // Date until now
-        lToDateAndTime := NOW;
+          lDaysToLookAfterRecords := iniFile.ReadInteger('SalesTransaction', 'Days to look for records', 5);
+          // AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+          AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
+          // Date of last run
+          lDateAndTimeOfLastRun := iniFile.ReadDateTime('SalesTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
+          // lFromDateAndTime := lDateAndTimeOfLastRun;
+          lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
+          // Date until now
+          lToDateAndTime := NOW;
 
-        // Log
-        AddToLog(Format('  Fetching sales transactions. Period %s to %s',
-          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
-          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+          // Log
+          AddToLog(Format('  Fetching sales transactions. Period %s to %s',
+            [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+            FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
-        // Fetch sales transactions. The need to be fetched in ascending date order
-        QFetchSalesTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
-        QFetchSalesTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
-        QFetchSalesTransactions.SQL.SaveToFile(SQLLogFileFolder + 'SalesTransactions.SQL');
-        QFetchSalesTransactions.Open;
+          // Fetch sales transactions. The need to be fetched in ascending date order
+          QFetchSalesTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+          QFetchSalesTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+          QFetchSalesTransactions.SQL.SaveToFile(SQLLogFileFolder + 'SalesTransactions.SQL');
+          QFetchSalesTransactions.Open;
 
-        // Log
-        AddToLog(Format('  Query opened', []));
+          // Log
+          AddToLog(Format('  Query opened', []));
 
-        if QFetchSalesTransactions.RecordCount > 0 then
-        begin
-          // At least 1 record is there - fetch next transactions UD
-          BC_TransactionID := FetchNextTransID('sales transations');
-          lNumberOfExportedSalesTransactions := 0;
-          RoutineCanceled := FALSE;
-          While (Not(QFetchSalesTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+          if QFetchSalesTransactions.RecordCount > 0 then
           begin
-            RoutineCanceled := NOT CreateAndExportSalesTransaction;
-            if NOT RoutineCanceled then
+            // At least 1 record is there - fetch next transactions UD
+            BC_TransactionID := FetchNextTransID('sales transations');
+            lNumberOfExportedSalesTransactions := 0;
+            RoutineCanceled := FALSE;
+            While (Not(QFetchSalesTransactions.Eof)) AND (NOT(RoutineCanceled)) do
             begin
-              // save highest TransID of record
-              QFetchSalesTransactions.Next;
+              RoutineCanceled := NOT CreateAndExportSalesTransaction;
+              if NOT RoutineCanceled then
+              begin
+                // save highest TransID of record
+                QFetchSalesTransactions.Next;
+              end;
             end;
-          end;
-          if RoutineCanceled then
-          begin
-            AddToLog('  Iteration done with errors. ');
-          end
-          else
-          begin
-            AddToLog('  Iteration done succesfull');
-          end;
-
-          QFetchSalesTransactions.Close;
-          if (tnMain.Active) then
-            tnMain.Commit;
-
-          if (NOT(RoutineCanceled)) then
-          begin
-            /// All good
-            if NOT OnlyTestRoutine then
+            if RoutineCanceled then
             begin
-              if (tnMain.Active) then
-                tnMain.Commit;
-
-              // This is now done after each successful transfer
-              // iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
-              InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              AddToLog('  Iteration done with errors. ');
+            end
+            else
+            begin
+              AddToLog('  Iteration done succesfull');
             end;
-          end
-          else
-          begin
-            // Some error
-            lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
-              'Vedhæftet er en fil med information' + #13#10;
-            SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
-            // Rename error file
-            TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_Salgstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+
+            QFetchSalesTransactions.Close;
             if (tnMain.Active) then
-              tnMain.Rollback;
-            AddToLog('  Export of sales transaction ended with errors.');
-            InsertTracingLog(6, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              tnMain.Commit;
+
+            if (NOT(RoutineCanceled)) then
+            begin
+              /// All good
+              if NOT OnlyTestRoutine then
+              begin
+                if (tnMain.Active) then
+                  tnMain.Commit;
+
+                // This is now done after each successful transfer
+                // iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
+                InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              end;
+            end
+            else
+            begin
+              // Some error
+              lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
+                'Vedhæftet er en fil med information' + #13#10;
+              SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
+              // Rename error file
+              TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_Salgstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+              if (tnMain.Active) then
+                tnMain.Rollback;
+              AddToLog('  Export of sales transaction ended with errors.');
+              InsertTracingLog(6, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+            end;
+            iniFile.WriteDateTime('SalesTransaction', 'Last time sync to BC was tried', NOW);
+            AddToLog('  Routine done');
+          end
+          else
+          begin
+            if (tnMain.Active) then
+              tnMain.Commit;
+            AddToLog(Format('  No sales transactions to export', []));
           end;
-          iniFile.WriteDateTime('SalesTransaction', 'Last time sync to BC was tried', NOW);
-          AddToLog('  Routine done');
-        end
-        else
-        begin
-          if (tnMain.Active) then
-            tnMain.Commit;
-          AddToLog(Format('  No sales transactions to export', []));
+        finally
+          AddToLog('  TBusinessCentral - Free');
+          FReeAndNil(lBusinessCentral);
         end;
       finally
-        AddToLog('  TBusinessCentral - Free');
-        FReeAndNil(lBusinessCentral);
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
       end;
-    finally
-      AddToLog('  TBusinessCentralSetup - Free');
-      FReeAndNil(lBusinessCentralSetup);
-    end;
 
-    DisconnectFromDB;
+      DisconnectFromDB;
+    end;
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('DoSyncronizeSalesTransactions - ERROR. %s', [E.Message]));
+      WriteEventLog(Format('DoSyncronizeSalesTransactions - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3299, 1);
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
   end;
   AddToLog('DoSyncronizeSalesTransactions - END');
 end;
@@ -2060,6 +2490,7 @@ var
               '  Message: ' + E.Message;
             AddToLog(lErrotString);
             AddToErrorLog(lErrotString, lMovementsTransactionErrorFileName);
+            WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3301, 1);
           end;
         end;
 {$ENDIF}
@@ -2091,7 +2522,7 @@ var
         try
           lkmItemMove.transId := BC_TransactionID;
           lkmItemMove.flytningsId := QFetchMovementsTransactions.FieldByName('FlytningsID').AsString;
-          lkmItemMove.vareId := QFetchMovementsTransactions.FieldByName('VareID').AsString;
+          lkmItemMove.VareId := QFetchMovementsTransactions.FieldByName('VareID').AsString;
           lkmItemMove.variantId := QFetchMovementsTransactions.FieldByName('VariantID').AsString;
           lkmItemMove.epId := QFetchMovementsTransactions.FieldByName('EPID').AsInteger;
           lkmItemMove.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchMovementsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
@@ -2104,7 +2535,7 @@ var
             Et alternativ er, at ændre klassen og ændre det nedenfor.
             lkmItemMove.antal := Round(QFetchMovementsTransactions.FieldByName('Antal').AsFloat);
           *)
-          lkmItemMove.antal := Trunc(QFetchMovementsTransactions.FieldByName('Antal').AsFloat);
+          lkmItemMove.antal := TRUNC(QFetchMovementsTransactions.FieldByName('Antal').AsFloat);
           if (QFetchMovementsTransactions.FieldByName('Antal').AsFloat <> 0) then
           begin
             lkmItemMove.kostPris := QFetchMovementsTransactions.FieldByName('KostPris').AsFloat / QFetchMovementsTransactions.FieldByName('Antal').AsFloat;
@@ -2147,6 +2578,7 @@ var
               '  JSON: ' + lJSONStr + #13#10;
             AddToLog(lErrotString);
             AddToErrorLog(lErrotString, lMovementsTransactionErrorFileName);
+            WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3302, 1);
           end;
           FReeAndNil(lResponse);
         finally
@@ -2170,411 +2602,424 @@ var
         '  JSON: ' + lJSONStr + #13#10;
       AddToLog(lErrotString);
       AddToErrorLog(lErrotString, lMovementsTransactionErrorFileName);
+      WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3303, 1);
     end;
     FReeAndNil(lGetResponse);
   end;
 
 begin
   AddToLog('DoSyncronizeMovemmentsTransaction - BEGIN');
-  if (ConnectToDB) then
-  begin
-    AddToLog('  TBusinessCentralSetup.Create');
-    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-      LF_BC_PORT_Str,
-      LF_BC_COMPANY_URL,
-      LF_BC_ACTIVECOMPANYID,
-      LF_BC_Environment,
-      LF_BC_USERNAME,
-      LF_BC_PASSWORD,
-      LF_BC_Version);
-    try
-      AddToLog('  TBusinessCentral.Create');
-      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+  try
+    if (ConnectToDB) then
+    begin
+      AddToLog('  TBusinessCentralSetup.Create');
+      lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+        LF_BC_PORT_Str,
+        LF_BC_COMPANY_URL,
+        LF_BC_ACTIVECOMPANYID,
+        LF_BC_Environment,
+        LF_BC_USERNAME,
+        LF_BC_PASSWORD,
+        LF_BC_Version);
       try
-        if (NOT(tnMain.Active)) then
-          tnMain.StartTransaction;
+        AddToLog('  TBusinessCentral.Create');
+        lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+        try
+          if (NOT(tnMain.Active)) then
+            tnMain.StartTransaction;
 
-        // Date of last run
-        lDaysToLookAfterRecords := iniFile.ReadInteger('MovementsTransaction', 'Days to look for records', 5);
-//        AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
-        AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
-        lDateAndTimeOfLastRun := iniFile.ReadDateTime('MovementsTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
-//        lFromDateAndTime := lDateAndTimeOfLastRun;
-        lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
-        // Date until now
-        lToDateAndTime := NOW;
+          // Date of last run
+          lDaysToLookAfterRecords := iniFile.ReadInteger('MovementsTransaction', 'Days to look for records', 5);
+          // AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
+          AddToLog(Format('Days to look for records which has not yet been transferred:  %s', [lDaysToLookAfterRecords.ToString]));
+          lDateAndTimeOfLastRun := iniFile.ReadDateTime('MovementsTransaction', 'Last run', NOW - lDaysToLookAfterRecords);
+          // lFromDateAndTime := lDateAndTimeOfLastRun;
+          lFromDateAndTime := lDateAndTimeOfLastRun - lDaysToLookAfterRecords;
+          // Date until now
+          lToDateAndTime := NOW;
 
-        // Log
-        AddToLog(Format('  Fetching records. movements transactons. Period %s to %s',
-          [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
-          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+          // Log
+          AddToLog(Format('  Fetching records. movements transactons. Period %s to %s',
+            [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+            FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 
-        // Fetch movements transactions.
-        // AND  (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)
-        // We need to fetch them in ascending date order
-        QFetchMovementsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
-        QFetchMovementsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
-        QFetchMovementsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'MovementsTransactions.SQL');
-        QFetchMovementsTransactions.Open;
-        // Log
-        AddToLog(Format('  Query opened', []));
-        If (Not(QFetchMovementsTransactions.EOF)) then
-        begin
-          // At least 1 record is there - fetch next transactions UD
-          BC_TransactionID := FetchNextTransID('movements transations');
-          lNumberOfExportedMovementsTransactions := 0;
-          RoutineCanceled := FALSE;
-          While (Not(QFetchMovementsTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+          // Fetch movements transactions.
+          // AND  (tr.EKSPORTERET = 0 OR tr.EKSPORTERET IS NULL)
+          // We need to fetch them in ascending date order
+          QFetchMovementsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+          QFetchMovementsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+          QFetchMovementsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'MovementsTransactions.SQL');
+          QFetchMovementsTransactions.Open;
+          // Log
+          AddToLog(Format('  Query opened', []));
+          If (Not(QFetchMovementsTransactions.Eof)) then
           begin
-            RoutineCanceled := NOT CreateAndExportMovementsTransaction;
-            if NOT RoutineCanceled then
+            // At least 1 record is there - fetch next transactions UD
+            BC_TransactionID := FetchNextTransID('movements transations');
+            lNumberOfExportedMovementsTransactions := 0;
+            RoutineCanceled := FALSE;
+            While (Not(QFetchMovementsTransactions.Eof)) AND (NOT(RoutineCanceled)) do
             begin
-              QFetchMovementsTransactions.Next;
+              RoutineCanceled := NOT CreateAndExportMovementsTransaction;
+              if NOT RoutineCanceled then
+              begin
+                QFetchMovementsTransactions.Next;
+              end;
             end;
-          end;
-          AddToLog('  Iteration done');
+            AddToLog('  Iteration done');
 
-          QFetchMovementsTransactions.Close;
-          if (tnMain.Active) then
-            tnMain.Commit;
-
-          if (NOT(RoutineCanceled)) then
-          begin
+            QFetchMovementsTransactions.Close;
             if (tnMain.Active) then
               tnMain.Commit;
-            // This is now done aftereach succesful transfer
-            // iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
-            InsertTracingLog(11, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+
+            if (NOT(RoutineCanceled)) then
+            begin
+              if (tnMain.Active) then
+                tnMain.Commit;
+              // This is now done aftereach succesful transfer
+              // iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
+              InsertTracingLog(11, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+            end
+            else
+            begin
+              lText := 'Der skete en fejl ved synkronisering af flytningstransaktioner til Business Central.' + #13#10 +
+                'Vedhæftet er en fil med information' + #13#10;
+              SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
+              // Rename error file
+              TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt',
+                [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+              if (tnMain.Active) then
+                tnMain.Rollback;
+              AddToLog('  Export of movements transaction ended with errors.');
+              InsertTracingLog(12, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+            end;
+            iniFile.WriteDateTime('MovementsTransaction', 'Last time sync to BC was tried', NOW);
+            AddToLog('  Routine done');
           end
           else
           begin
-            lText := 'Der skete en fejl ved synkronisering af flytningstransaktioner til Business Central.' + #13#10 +
-              'Vedhæftet er en fil med information' + #13#10;
-            SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
-            // Rename error file
-            TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt',
-              [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
             if (tnMain.Active) then
-              tnMain.Rollback;
-            AddToLog('  Export of movements transaction ended with errors.');
-            InsertTracingLog(12, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              tnMain.Commit;
+            AddToLog(Format('  No Movements transactions to export', []));
           end;
-          iniFile.WriteDateTime('MovementsTransaction', 'Last time sync to BC was tried', NOW);
-          AddToLog('  Routine done');
-        end
-        else
-        begin
-          if (tnMain.Active) then
-            tnMain.Commit;
-          AddToLog(Format('  No Movements transactions to export', []));
+        finally
+          AddToLog('  TBusinessCentral - Free');
+          FReeAndNil(lBusinessCentral);
         end;
       finally
-        AddToLog('  TBusinessCentral - Free');
-        FReeAndNil(lBusinessCentral);
+        AddToLog('  TBusinessCentralSetup - Free');
+        FReeAndNil(lBusinessCentralSetup);
       end;
-    finally
-      AddToLog('  TBusinessCentralSetup - Free');
-      FReeAndNil(lBusinessCentralSetup);
-    end;
 
-    DisconnectFromDB;
+      DisconnectFromDB;
+    end;
+  except
+    on E: Exception do
+    begin
+      AddToLog(Format('DoSyncronizeMovemmentsTransaction - ERROR. %s', [E.Message]));
+      WriteEventLog(Format('DoSyncronizeMovemmentsTransaction - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central',
+        EVENTLOG_ERROR_TYPE, 3399, 1);
+      if (tnMain.Active) then
+        tnMain.Rollback;
+    end;
   end;
   AddToLog('DoSyncronizeMovemmentsTransaction - END');
 end;
 
-//procedure TDM.DoSyncronizeStockRegulationTransaction;
-//const
-//  lStockRegulationsTransactionErrorFileName: String = 'StockRegulationstransactionErrors.txt';
-//var
-//  lBusinessCentralSetup: TBusinessCentralSetup;
-//  lBusinessCentral: TBusinessCentral;
-//  lDaysToLookAfterRecords: Integer;
-//  lDateAndTimeOfLastRun: TDateTime;
-//  lFromDateAndTime: TDateTime;
-//  lToDateAndTime: Extended;
-//  BC_TransactionID: Integer;
-//  lNumberOfExportedStockRegulationTransactions: Integer;
-//  RoutineCanceled: Boolean;
-//  lText: string;
-//  lResponse: TBusinessCentral_Response;
+// procedure TDM.DoSyncronizeStockRegulationTransaction;
+// const
+// lStockRegulationsTransactionErrorFileName: String = 'StockRegulationstransactionErrors.txt';
+// var
+// lBusinessCentralSetup: TBusinessCentralSetup;
+// lBusinessCentral: TBusinessCentral;
+// lDaysToLookAfterRecords: Integer;
+// lDateAndTimeOfLastRun: TDateTime;
+// lFromDateAndTime: TDateTime;
+// lToDateAndTime: Extended;
+// BC_TransactionID: Integer;
+// lNumberOfExportedStockRegulationTransactions: Integer;
+// RoutineCanceled: Boolean;
+// lText: string;
+// lResponse: TBusinessCentral_Response;
 //
-//  Function CreateAndExporStockRegulationsTransaction: Boolean;
-//  var
-//    lJSONStr: string;
-//    DoContinue: Boolean;
-//    lErrotString: string;
-//    lkmItemAccess: TkmItemAccess;
-//    DoContinueWithInsert: Boolean;
-//    lGetResponse: TBusinessCentral_Response;
+// Function CreateAndExporStockRegulationsTransaction: Boolean;
+// var
+// lJSONStr: string;
+// DoContinue: Boolean;
+// lErrotString: string;
+// lkmItemAccess: TkmItemAccess;
+// DoContinueWithInsert: Boolean;
+// lGetResponse: TBusinessCentral_Response;
 //
-//    function DoMarkStockRegulationTransactionsAsExported: Boolean;
-//    begin
-//      if NOT OnlyTestRoutine then
-//      begin
-//{$IFDEF RELEASE}
-//        try
-//          if NOT trSetEksportedValueOnStockTrans.Active then
-//          begin
-//            trSetEksportedValueOnStockTrans.StartTransaction;
-//          end;
-//          QSetEksportedValueOnStockTrans.SQL.Clear;
+// function DoMarkStockRegulationTransactionsAsExported: Boolean;
+// begin
+// if NOT OnlyTestRoutine then
+// begin
+// {$IFDEF RELEASE}
+// try
+// if NOT trSetEksportedValueOnStockTrans.Active then
+// begin
+// trSetEksportedValueOnStockTrans.StartTransaction;
+// end;
+// QSetEksportedValueOnStockTrans.SQL.Clear;
 //
-//          QSetEksportedValueOnStockTrans.SQL.Add('Update Transaktioner t set');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.Eksporteret = :PEksporteret');
-//          QSetEksportedValueOnStockTrans.SQL.Add('Where');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.art=11 AND');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.bonnr = :PBOnNr AND');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.dato = :PDato AND');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.levnavn = :PLevNavn AND');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  t.afdeling_id = :PAfdeling_ID AND');
-//          QSetEksportedValueOnStockTrans.SQL.Add('  (t.EKSPORTERET>=0 or t.EKSPORTERET IS null)');
-//          QSetEksportedValueOnStockTrans.ParamByName('PEksporteret').AsInteger := QFetchStockRegulationsTransactions.FieldByName('Eksporteret').AsInteger + 1;
-//          QSetEksportedValueOnStockTrans.ParamByName('PBOnNr').AsInteger := QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsInteger;
-//          QSetEksportedValueOnStockTrans.ParamByName('PDato').AsDateTime := QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime;
-//          QSetEksportedValueOnStockTrans.ParamByName('PLevNavn').AsString := QFetchStockRegulationsTransactions.FieldByName('LeverandorNavn').AsString;
-//          QSetEksportedValueOnStockTrans.ParamByName('PAfdeling_ID').AsString := QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString;
-//          QSetEksportedValueOnStockTrans.ExecSQL;
-//          if trSetEksportedValueOnStockTrans.Active then
-//          begin
-//            trSetEksportedValueOnStockTrans.Commit;
-//          end;
-//          Result := TRUE;
-//        except
-//          On E: Exception do
-//          begin
-//            Result := FALSE;
+// QSetEksportedValueOnStockTrans.SQL.Add('Update Transaktioner t set');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.Eksporteret = :PEksporteret');
+// QSetEksportedValueOnStockTrans.SQL.Add('Where');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.art=11 AND');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.bonnr = :PBOnNr AND');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.dato = :PDato AND');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.levnavn = :PLevNavn AND');
+// QSetEksportedValueOnStockTrans.SQL.Add('  t.afdeling_id = :PAfdeling_ID AND');
+// QSetEksportedValueOnStockTrans.SQL.Add('  (t.EKSPORTERET>=0 or t.EKSPORTERET IS null)');
+// QSetEksportedValueOnStockTrans.ParamByName('PEksporteret').AsInteger := QFetchStockRegulationsTransactions.FieldByName('Eksporteret').AsInteger + 1;
+// QSetEksportedValueOnStockTrans.ParamByName('PBOnNr').AsInteger := QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsInteger;
+// QSetEksportedValueOnStockTrans.ParamByName('PDato').AsDateTime := QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime;
+// QSetEksportedValueOnStockTrans.ParamByName('PLevNavn').AsString := QFetchStockRegulationsTransactions.FieldByName('LeverandorNavn').AsString;
+// QSetEksportedValueOnStockTrans.ParamByName('PAfdeling_ID').AsString := QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString;
+// QSetEksportedValueOnStockTrans.ExecSQL;
+// if trSetEksportedValueOnStockTrans.Active then
+// begin
+// trSetEksportedValueOnStockTrans.Commit;
+// end;
+// Result := TRUE;
+// except
+// On E: Exception do
+// begin
+// Result := FALSE;
 //
-//            lErrotString := Format('Unexpected error when marking stock regulation transaction exported in EasyPOS ' + #13#10 +
-//              'lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central' + #13#10 +
-//              'Message: %s', [
-//              QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
-//              QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
-//              QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
-//              FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime),
-//              E.Message
-//              ]);
-//            AddToLog(lErrotString);
-//            AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
-//          end;
-//        end;
-//{$ENDIF}
-//{$IFDEF DEBUG}
-//        Result := TRUE;
-//{$ENDIF}
-//      end
-//      else
-//      begin
-//        Result := TRUE;
-//      end;
-//    end;
+// lErrotString := Format('Unexpected error when marking stock regulation transaction exported in EasyPOS ' + #13#10 +
+// 'lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central' + #13#10 +
+// 'Message: %s', [
+// QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
+// FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime),
+// E.Message
+// ]);
+// AddToLog(lErrotString);
+// AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
+// end;
+// end;
+// {$ENDIF}
+// {$IFDEF DEBUG}
+// Result := TRUE;
+// {$ENDIF}
+// end
+// else
+// begin
+// Result := TRUE;
+// end;
+// end;
 //
-//  begin
-//    AddToLog(Format('  Checking lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central', [
-//      QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
-//      QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
-//      QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
-//      FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
-//      ]));
-//    lBusinessCentralSetup.FilterValue := Format('lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' ', [
-//      QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
-//      QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
-//      QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
-//      FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
-//      ]);
-//    // Mine order værdier.-
-//    lBusinessCentralSetup.OrderValue := '';
-//    // Select fields
-//    lBusinessCentralSetup.SelectValue := '';
-//    // Hent dem.
-//    DoContinueWithInsert := lBusinessCentral.GetkmItemAccesss(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
+// begin
+// AddToLog(Format('  Checking lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central', [
+// QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
+// FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
+// ]));
+// lBusinessCentralSetup.FilterValue := Format('lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' ', [
+// QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
+// FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
+// ]);
+// // Mine order værdier.-
+// lBusinessCentralSetup.OrderValue := '';
+// // Select fields
+// lBusinessCentralSetup.SelectValue := '';
+// // Hent dem.
+// DoContinueWithInsert := lBusinessCentral.GetkmItemAccesss(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
 //
-//    if DoContinueWithInsert then
-//    begin
-//      if (lGetResponse as TkmItemAccesss).Value.Count = 0 then
-//      begin
-//        lkmItemAccess := TkmItemAccess.Create;
-//        try
-//          lkmItemAccess.transId := BC_TransactionID;
-//          lkmItemAccess.butikId := QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString;
-//          lkmItemAccess.leverandRKode := QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString;
-//          lkmItemAccess.lagertilgangsnummer := QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString;
-//          lkmItemAccess.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
-//          lkmItemAccess.belB := QFetchStockRegulationsTransactions.FieldByName('Belob').AsFloat;
-//          lkmItemAccess.status := '0';
-//          lkmItemAccess.tilbagefRt := FALSE;
-//          lkmItemAccess.transDato := FormatDateTime('dd-mm-yyyy', NOW);
-//          lkmItemAccess.transTid := FormatDateTime('hh:mm:ss', NOW);
+// if DoContinueWithInsert then
+// begin
+// if (lGetResponse as TkmItemAccesss).Value.Count = 0 then
+// begin
+// lkmItemAccess := TkmItemAccess.Create;
+// try
+// lkmItemAccess.transId := BC_TransactionID;
+// lkmItemAccess.butikId := QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString;
+// lkmItemAccess.leverandRKode := QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString;
+// lkmItemAccess.lagertilgangsnummer := QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString;
+// lkmItemAccess.bogfRingsDato := FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime);
+// lkmItemAccess.belB := QFetchStockRegulationsTransactions.FieldByName('Belob').AsFloat;
+// lkmItemAccess.status := '0';
+// lkmItemAccess.tilbagefRt := FALSE;
+// lkmItemAccess.transDato := FormatDateTime('dd-mm-yyyy', NOW);
+// lkmItemAccess.transTid := FormatDateTime('hh:mm:ss', NOW);
 //
-//          lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemAccess);
+// lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemAccess);
 //
-//          INC(lNumberOfExportedStockRegulationTransactions);
-//          // Add to log
-//          AddToLog(Format('  Stock regulation transaction record to transfer: %d - %s', [lNumberOfExportedStockRegulationTransactions, lJSONStr]));
-//          if OnlyTestRoutine then
-//          begin
-//            DoContinue := TRUE;
-//          end
-//          else
-//          begin
-//            DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse, LF_BC_Version));
-//          end;
+// INC(lNumberOfExportedStockRegulationTransactions);
+// // Add to log
+// AddToLog(Format('  Stock regulation transaction record to transfer: %d - %s', [lNumberOfExportedStockRegulationTransactions, lJSONStr]));
+// if OnlyTestRoutine then
+// begin
+// DoContinue := TRUE;
+// end
+// else
+// begin
+// DoContinue := (lBusinessCentral.PostkmItemAccess(lBusinessCentralSetup, lkmItemAccess, lResponse, LF_BC_Version));
+// end;
 //
-//          if DoContinue then
-//          begin
-//            Result := DoMarkStockRegulationTransactionsAsExported;
-//          end
-//          else
-//          begin
-//            Result := FALSE;
+// if DoContinue then
+// begin
+// Result := DoMarkStockRegulationTransactionsAsExported;
+// end
+// else
+// begin
+// Result := FALSE;
 //
-//            lErrotString := 'Unexpected error when inserting stock regulation transaction in BC ' + #13#10 +
-//              '  EP Bonnr: ' + QFetchStockRegulationsTransactions.FieldByName('LagerTilgangsNummer').AsString + #13#10 +
-//              '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-//              '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
-//              '  JSON: ' + lJSONStr + #13#10;
-//            AddToLog(lErrotString);
-//            AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
-//          end;
-//          FReeAndNil(lResponse);
-//        finally
-//          FReeAndNil(lkmItemAccess);
-//        end;
-//      end
-//      else
-//      begin
-//        AddToLog(Format
-//          ('  Already inserted. Skipping lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central', [
-//          QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
-//          QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
-//          QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
-//          FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
-//          ]));
+// lErrotString := 'Unexpected error when inserting stock regulation transaction in BC ' + #13#10 +
+// '  EP Bonnr: ' + QFetchStockRegulationsTransactions.FieldByName('LagerTilgangsNummer').AsString + #13#10 +
+// '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+// '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+// '  JSON: ' + lJSONStr + #13#10;
+// AddToLog(lErrotString);
+// AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
+// end;
+// FReeAndNil(lResponse);
+// finally
+// FReeAndNil(lkmItemAccess);
+// end;
+// end
+// else
+// begin
+// AddToLog(Format
+// ('  Already inserted. Skipping lagertilgangsnummer eq ''%s'' and leverandRKode eq ''%s'' and butikId eq ''%s'' and bogfRingsDato eq ''%s'' in Business Central', [
+// QFetchStockRegulationsTransactions.FieldByName('Lagertilgangsnummer').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('LeverandorKode').AsString,
+// QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
+// FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
+// ]));
 //
-//        Result := DoMarkStockRegulationTransactionsAsExported;
-//      end;
-//    end
-//    else
-//    begin
-//      // Do not continue. Some error from BC when trying to get a record
-//      Result := FALSE;
-//      lErrotString := 'Unexpected error when checking stock regulation transaction in BC ' + #13#10 +
-//        '  EP ID: ' + QFetchStockRegulationsTransactions.FieldByName('EPID').AsString + #13#10 +
-//        '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-//        '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
-//        '  JSON: ' + lJSONStr + #13#10;
-//      AddToLog(lErrotString);
-//      AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
-//    end;
-//    FReeAndNil(lGetResponse);
-//  end;
+// Result := DoMarkStockRegulationTransactionsAsExported;
+// end;
+// end
+// else
+// begin
+// // Do not continue. Some error from BC when trying to get a record
+// Result := FALSE;
+// lErrotString := 'Unexpected error when checking stock regulation transaction in BC ' + #13#10 +
+// '  EP ID: ' + QFetchStockRegulationsTransactions.FieldByName('EPID').AsString + #13#10 +
+// '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
+// '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
+// '  JSON: ' + lJSONStr + #13#10;
+// AddToLog(lErrotString);
+// AddToErrorLog(lErrotString, lStockRegulationsTransactionErrorFileName);
+// end;
+// FReeAndNil(lGetResponse);
+// end;
 //
-//begin
-//  AddToLog('DoSyncronizeStockRegulationTransaction - BEGIN');
-//  if (ConnectToDB) then
-//  begin
-//    AddToLog('  TBusinessCentralSetup.Create');
-//    lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
-//      LF_BC_PORT_Str,
-//      LF_BC_COMPANY_URL,
-//      LF_BC_ACTIVECOMPANYID,
-//      LF_BC_Environment,
-//      LF_BC_USERNAME,
-//      LF_BC_PASSWORD,
-//      LF_BC_Version);
-//    try
-//      AddToLog('  TBusinessCentral.Create');
-//      lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
-//      try
-//        if (NOT(tnMain.Active)) then
-//          tnMain.StartTransaction;
+// begin
+// AddToLog('DoSyncronizeStockRegulationTransaction - BEGIN');
+// if (ConnectToDB) then
+// begin
+// AddToLog('  TBusinessCentralSetup.Create');
+// lBusinessCentralSetup := TBusinessCentralSetup.Create(LF_BC_BASEURL,
+// LF_BC_PORT_Str,
+// LF_BC_COMPANY_URL,
+// LF_BC_ACTIVECOMPANYID,
+// LF_BC_Environment,
+// LF_BC_USERNAME,
+// LF_BC_PASSWORD,
+// LF_BC_Version);
+// try
+// AddToLog('  TBusinessCentral.Create');
+// lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
+// try
+// if (NOT(tnMain.Active)) then
+// tnMain.StartTransaction;
 //
-//        // Date of last run
-//        lDaysToLookAfterRecords := iniFile.ReadInteger('StockRegulation', 'Days to look for records', 5);
-//        lDateAndTimeOfLastRun := iniFile.ReadDateTime('StockRegulation', 'Last run', NOW - lDaysToLookAfterRecords);
-//        lFromDateAndTime := lDateAndTimeOfLastRun;
-//        // Date until now
-//        lToDateAndTime := NOW;
+// // Date of last run
+// lDaysToLookAfterRecords := iniFile.ReadInteger('StockRegulation', 'Days to look for records', 5);
+// lDateAndTimeOfLastRun := iniFile.ReadDateTime('StockRegulation', 'Last run', NOW - lDaysToLookAfterRecords);
+// lFromDateAndTime := lDateAndTimeOfLastRun;
+// // Date until now
+// lToDateAndTime := NOW;
 //
-//        // Log
-//        AddToLog(Format('  Fetching records. Stock regulation transactons. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
-//          FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
+// // Log
+// AddToLog(Format('  Fetching records. Stock regulation transactons. Period %s to %s', [FormatDateTime('yyyy-mm-dd hh:mm:ss', lFromDateAndTime),
+// FormatDateTime('yyyy-mm-dd hh:mm:ss', lToDateAndTime)]));
 //
-//        // Fetch movements transactions.
-//        QFetchStockRegulationsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
-//        QFetchStockRegulationsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
-//        QFetchStockRegulationsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'StockRegulationsTransactions.SQL');
-//        QFetchStockRegulationsTransactions.Open;
+// // Fetch movements transactions.
+// QFetchStockRegulationsTransactions.ParamByName('PFromDate').AsDateTime := lFromDateAndTime;
+// QFetchStockRegulationsTransactions.ParamByName('PToDate').AsDateTime := lToDateAndTime;
+// QFetchStockRegulationsTransactions.SQL.SaveToFile(SQLLogFileFolder + 'StockRegulationsTransactions.SQL');
+// QFetchStockRegulationsTransactions.Open;
 //
-//        // Log
-//        AddToLog(Format('  Query opened', []));
-//        If (Not(QFetchStockRegulationsTransactions.EOF)) then
-//        begin
-//          // At least 1 record is there - fetch next transactions UD
-//          BC_TransactionID := FetchNextTransID('movements transations');
-//          lNumberOfExportedStockRegulationTransactions := 0;
-//          RoutineCanceled := FALSE;
-//          While (Not(QFetchStockRegulationsTransactions.EOF)) AND (NOT(RoutineCanceled)) do
-//          begin
-//            RoutineCanceled := NOT CreateAndExporStockRegulationsTransaction;
-//            if NOT RoutineCanceled then
-//            begin
-//              QFetchStockRegulationsTransactions.Next;
-//            end;
-//          end;
-//          AddToLog('  Iteration done');
+// // Log
+// AddToLog(Format('  Query opened', []));
+// If (Not(QFetchStockRegulationsTransactions.EOF)) then
+// begin
+// // At least 1 record is there - fetch next transactions UD
+// BC_TransactionID := FetchNextTransID('movements transations');
+// lNumberOfExportedStockRegulationTransactions := 0;
+// RoutineCanceled := FALSE;
+// While (Not(QFetchStockRegulationsTransactions.EOF)) AND (NOT(RoutineCanceled)) do
+// begin
+// RoutineCanceled := NOT CreateAndExporStockRegulationsTransaction;
+// if NOT RoutineCanceled then
+// begin
+// QFetchStockRegulationsTransactions.Next;
+// end;
+// end;
+// AddToLog('  Iteration done');
 //
-//          QFetchStockRegulationsTransactions.Close;
-//          if (tnMain.Active) then
-//            tnMain.Commit;
+// QFetchStockRegulationsTransactions.Close;
+// if (tnMain.Active) then
+// tnMain.Commit;
 //
-//          if (NOT(RoutineCanceled)) then
-//          begin
-//            if (tnMain.Active) then
-//              tnMain.Commit;
+// if (NOT(RoutineCanceled)) then
+// begin
+// if (tnMain.Active) then
+// tnMain.Commit;
 //
-//            iniFile.WriteDateTime('StockRegulation', 'Last run', lToDateAndTime);
-//            InsertTracingLog(7, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
-//          end
-//          else
-//          begin
-//            lText := 'Der skete en fejl ved synkronisering af tilgangstransaktioner til Business Central.' + #13#10 +
-//              'Vedhæftet er en fil med information' + #13#10;
-//            SendErrorMail(LogFileFolder + lStockRegulationsTransactionErrorFileName, 'tilgangstransaktioner', lText);
-//            // Rename error file
-//            TFile.Move(LogFileFolder + lStockRegulationsTransactionErrorFileName, LogFileFolder + Format('Error_Tilgangstransaktioner_%s.txt',
-//              [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
-//            if (tnMain.Active) then
-//              tnMain.Rollback;
-//            AddToLog('  Export of stock regulation transaction ended with errors.');
-//            InsertTracingLog(8, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
-//          end;
-//          iniFile.WriteDateTime('StockRegulation', 'Last time sync to BC was tried', NOW);
-//          AddToLog('  Routine done');
-//        end
-//        else
-//        begin
-//          if (tnMain.Active) then
-//            tnMain.Commit;
-//          AddToLog(Format('  No stock regulation transactions to export', []));
-//        end;
-//      finally
-//        AddToLog('  TBusinessCentral - Free');
-//        FReeAndNil(lBusinessCentral);
-//      end;
-//    finally
-//      AddToLog('  TBusinessCentralSetup - Free');
-//      FReeAndNil(lBusinessCentralSetup);
-//    end;
+// iniFile.WriteDateTime('StockRegulation', 'Last run', lToDateAndTime);
+// InsertTracingLog(7, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+// end
+// else
+// begin
+// lText := 'Der skete en fejl ved synkronisering af tilgangstransaktioner til Business Central.' + #13#10 +
+// 'Vedhæftet er en fil med information' + #13#10;
+// SendErrorMail(LogFileFolder + lStockRegulationsTransactionErrorFileName, 'tilgangstransaktioner', lText);
+// // Rename error file
+// TFile.Move(LogFileFolder + lStockRegulationsTransactionErrorFileName, LogFileFolder + Format('Error_Tilgangstransaktioner_%s.txt',
+// [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+// if (tnMain.Active) then
+// tnMain.Rollback;
+// AddToLog('  Export of stock regulation transaction ended with errors.');
+// InsertTracingLog(8, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+// end;
+// iniFile.WriteDateTime('StockRegulation', 'Last time sync to BC was tried', NOW);
+// AddToLog('  Routine done');
+// end
+// else
+// begin
+// if (tnMain.Active) then
+// tnMain.Commit;
+// AddToLog(Format('  No stock regulation transactions to export', []));
+// end;
+// finally
+// AddToLog('  TBusinessCentral - Free');
+// FReeAndNil(lBusinessCentral);
+// end;
+// finally
+// AddToLog('  TBusinessCentralSetup - Free');
+// FReeAndNil(lBusinessCentralSetup);
+// end;
 //
-//    DisconnectFromDB;
-//  end;
-//  AddToLog('DoSyncronizeStockRegulationTransaction - END');
-//end;
+// DisconnectFromDB;
+// end;
+// AddToLog('DoSyncronizeStockRegulationTransaction - END');
+// end;
 
 procedure TDM.DoHandleEksportToBusinessCentral;
 var
   lSyncroniseFinancialRecords: Boolean;
   lSyncronizeItem: Boolean;
+  lSyncronizeCostprice: Boolean;
   lSyncronizeSalesTransactions: Boolean;
   lSyncronizeMovementsTransactions: Boolean;
   lSyncronizeStockRegulationsTransactions: Boolean;
@@ -2590,6 +3035,7 @@ begin
 
       lSyncroniseFinancialRecords := iniFile.ReadBool('SYNCRONIZE', 'FinancialRecords', FALSE);
       lSyncronizeItem := iniFile.ReadBool('SYNCRONIZE', 'Items', FALSE);
+      lSyncronizeCostprice := iniFile.ReadBool('SYNCRONIZE', 'Costprice from BC', FALSE);
       lSyncronizeSalesTransactions := iniFile.ReadBool('SYNCRONIZE', 'SalesTransactions', FALSE);
       lSyncronizeMovementsTransactions := iniFile.ReadBool('SYNCRONIZE', 'MovementsTransactions', FALSE);
       lSyncronizeStockRegulationsTransactions := iniFile.ReadBool('SYNCRONIZE', 'StockRegulationsTransactions', FALSE);
@@ -2601,6 +3047,7 @@ begin
 {$ENDIF}
       AddToLog(Format('Syncronize financial records: %s', [lSyncroniseFinancialRecords.ToString]));
       AddToLog(Format('Syncronize Items: %s', [lSyncronizeItem.ToString]));
+      AddToLog(Format('Syncronize csotpriced from BC: %s', [lSyncronizeCostprice.ToString]));
       AddToLog(Format('Syncronize Sales Transactions: %s', [lSyncronizeSalesTransactions.ToString]));
       AddToLog(Format('Syncronize Movements Transaction: %s', [lSyncronizeMovementsTransactions.ToString]));
       AddToLog(Format('Syncronize Stock regulations Transaction: %s', [lSyncronizeStockRegulationsTransactions.ToString]));
@@ -2609,6 +3056,11 @@ begin
       if lSyncronizeItem then
       begin
         DoSyncronizeItems;
+      end;
+
+      if lSyncronizeCostprice then
+      begin
+        DoSyncCostPriceFromBusinessCentral;
       end;
 
       if lSyncroniseFinancialRecords then
@@ -2629,13 +3081,14 @@ begin
       if lSyncronizeStockRegulationsTransactions then
       begin
         AddToLog(Format('Syncronize Stock regulations Transaction: DOES  NOT EXISTS', []));
-//        DoSyncronizeStockRegulationTransaction;
+        // DoSyncronizeStockRegulationTransaction;
       end;
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
   except
     on E: Exception do
     begin
+      WriteEventLog(Format('ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 1000, 0);
       AddToLog(Format('ERROR. %s', [E.Message]));
       if (tnMain.Active) then
         tnMain.Rollback;

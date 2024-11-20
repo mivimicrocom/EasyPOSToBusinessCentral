@@ -1,19 +1,20 @@
 program EasyPOS_To_BusinessCentral;
 
 uses
-{$IFNDEF RELEASE}
+  {$IFNDEF RELEASE}
   forms,
-{$ELSE}
+  {$ELSE}
   Vcl.SvcMgr,
-{$ENDIF }
-  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService} ,
-  UDM in 'UDM.pas' {DM: TDataModule} ,
-{$IFNDEF RELEASE}
-  uMain in 'uMain.pas' {frmMain} ,
-{$ENDIF }
+  {$ENDIF }
+  uEasyPOSToBC in 'uEasyPOSToBC.pas' {EasyPOSToBusinessCentralService: TService},
+  UDM in 'UDM.pas' {DM: TDataModule},
+  {$IFNDEF RELEASE}
+  uMain in 'uMain.pas' {frmMain},
+  {$ENDIF }
   uBusinessCentralIntegration in 'BusinessCentral-Integration\uBusinessCentralIntegration.pas',
-  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany} ,
-  uSendEMail in 'AfsendMail\uSendEMail.pas';
+  USelectCompany in 'BusinessCentral-Integration\USelectCompany.pas' {frmSelectCompany},
+  uSendEMail in 'AfsendMail\uSendEMail.pas',
+  uEventLogger in 'uEventLogger.pas';
 
 {$R *.RES}
 
@@ -42,7 +43,7 @@ begin
     Application.Initialize;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
-{$ENDIF}
+  {$ENDIF}
   Application.Run;
 
 end.
