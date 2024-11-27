@@ -745,12 +745,17 @@ object DM: TDM
     Transaction = tnMain
     SQL.Strings = (
       'SELECT'
-      '    V.PLU_NR'
+      '    V.PLU_NR,'
+      '    (SELECT'
+      '         COUNT(*)'
+      '     FROM VAREFRVSTR VV'
+      '     WHERE'
+      '         VV.VAREPLU_ID = V.PLU_NR) AS ANTALVV'
       'FROM VARER V'
       'WHERE'
       '    V.UPDATE_FROM_BC > 0'
       'ORDER BY'
-      '    V.PLU_NR DESC  ')
+      '    V.ANTAL_DETALJER DESC  ')
     Left = 280
     Top = 344
   end
