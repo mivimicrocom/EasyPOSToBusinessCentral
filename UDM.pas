@@ -982,6 +982,7 @@ var
         end
         else
         begin
+          DoContinue := TRUE;
           AddToLog(Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
           Result := TRUE;
         end;
@@ -989,6 +990,7 @@ var
       else
       begin
         // Do not continue. Some error from BC when trying to get a record
+        DoContinue := FALSE;
         Result := FALSE;
         lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
           '  EasyPOS Head item numbmer: ' + QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString + #13#10 +
