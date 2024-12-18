@@ -839,4 +839,46 @@ object DM: TDM
     Left = 480
     Top = 303
   end
+  object INS_WEBLogEasyPOS: TFDQuery
+    Connection = dbMain
+    Transaction = trUpdateCostprice
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    SQL.Strings = (
+      'INSERT INTO WEB_SLADREHANK ('
+      '    HVAD,'
+      '    HVEM,'
+      '    HVOR,'
+      '    DATO_STEMPEL,'
+      '    SQLSETNING)'
+      'VALUES ('
+      '    :HVAD,'
+      '    :HVEM,'
+      '    :HVOR,'
+      '    :DATO_STEMPEL,'
+      '    :SQLSETNING);')
+    Left = 552
+    Top = 80
+    ParamData = <
+      item
+        Name = 'HVAD'
+        ParamType = ptInput
+      end
+      item
+        Name = 'HVEM'
+        ParamType = ptInput
+      end
+      item
+        Name = 'HVOR'
+        ParamType = ptInput
+      end
+      item
+        Name = 'DATO_STEMPEL'
+        ParamType = ptInput
+      end
+      item
+        Name = 'SQLSETNING'
+        ParamType = ptInput
+      end>
+  end
 end

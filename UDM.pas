@@ -76,6 +76,7 @@ type
     qDepartmentsAndCurrency: TFDQuery;
     qFetchVariant: TFDQuery;
     qDoRegulation: TFDQuery;
+    INS_WEBLogEasyPOS: TFDQuery;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -670,6 +671,8 @@ var
     lIteration: Integer;
     lRecordUpdateToItem: Integer;
     lReturnedRecordsFromBC: Integer;
+    lLog: string;
+    lContent: string;
 
     function BuildFilterString(aBatchSize, aSkipCount: Integer): string;
     var
@@ -750,6 +753,7 @@ var
       begin
         // Lets set a new cost price on this variant in this department.
         AddToLogCostprice(Format('  Set costprice to %s on variant %s in department %s', [aCostprice.ToString, aBarcode, aDepartment]));
+        lLog := lLog + #13#10 + Format('  Set costprice to %s on variant %s in department %s', [aCostprice.ToString, aBarcode, aDepartment]);
         lSQLString := 'UPDATE VAREFRVSTR_DETAIL SET' + #13#10 +
           '  VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK = :PVEJETKOSTPRISSTK, ' + #13#10 +
           '  SIDSTEKOBSSTK = 1, ' + #13#10 +
@@ -854,6 +858,7 @@ var
         glFormatSettings.DecimalSeparator := '.';
 
         AddToLogCostprice(Format('Variant %s number %s', [aBarcode, lRecordUpdateToItem.ToString]));
+        lLog := lLog + #13#10 + Format('Variant %s number %s', [aBarcode, lRecordUpdateToItem.ToString]);
         qDepartmentsAndCurrency.Open;
         while (not(qDepartmentsAndCurrency.Eof)) do
         begin
@@ -871,6 +876,10 @@ var
               [FormatFloat('#,#0', aCostprice),
               aBarcode,
               qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString]));
+            lLog := lLog + #13#10 + Format('  Costprice from Business Central is %s on variant %s which is the same in EasyPOS department %s. Skipping',
+              [FormatFloat('#,#0', aCostprice),
+              aBarcode,
+              qDepartmentsAndCurrency.FieldByName('AFDELINGSNUMMER').AsString]);
           end
           else
           begin
@@ -898,6 +907,7 @@ var
           if (trUpdateCostprice.Active) then
             trUpdateCostprice.Rollback;
           AddToLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]));
+          lLog := lLog + #13#10 + Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]);
           WriteEventLog(Format('DoSyncCostPriceFromBusinessCentral - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central',
             EVENTLOG_ERROR_TYPE, 3599, 1);
           if (tnMain.Active) then
@@ -920,11 +930,32 @@ var
       qUpdateCostprice.ExecSQL;
     end;
 
+    procedure DoInsertEasyPOSLog(aLog: String);
+    begin
+      if (NOT(trUpdateCostprice.Active)) then
+        trUpdateCostprice.StartTransaction;
+
+      INS_WEBLogEasyPOS.ParamByName('HVAD').AsString := 'Kaufmann Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('HVEM').AsString := 'Kaufmann Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('HVOR').AsString := 'Kaufmann Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('DATO_STEMPEL').AsDateTime := NOW;
+      INS_WEBLogEasyPOS.ParamByName('SQLSETNING').AsString := aLog;
+      INS_WEBLogEasyPOS.ExecSQL;
+
+      if (trUpdateCostprice.Active) then
+        trUpdateCostprice.Commit;
+    end;
+
   begin
     AddToLog(Format('Checking head item %s with %s variants in Business Central. Item in this cycle: %s', [
       QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString,
       QFetchItemsUpdateCostprice.FieldByName('AntalVV').AsString,
       lNumberOfCostpriceUpdates.ToString]));
+    // Lets start EasyPOS log
+    lLog := Format('Checking head item %s with %s variants in Business Central. Item in this cycle: %s', [
+      QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString,
+      QFetchItemsUpdateCostprice.FieldByName('AntalVV').AsString,
+      lNumberOfCostpriceUpdates.ToString]);
 
     lRecordUpdateToItem := 0;
     lTotalRecords := QFetchItemsUpdateCostprice.FieldByName('AntalVV').AsInteger;
@@ -941,16 +972,23 @@ var
         lIteration.ToString,
         lBatchSize.ToString,
         lSkipCount.ToString]));
+      lLog := lLog + #13#10 + Format('  Iteration %s. Handling %s variants. Skipping %s', [
+        lIteration.ToString,
+        lBatchSize.ToString,
+        lSkipCount.ToString]);
       lBusinessCentralSetup.FilterValue := BuildFilterString(lBatchSize, lSkipCount);
 
       AddToLog(Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]));
+      lLog := lLog + #13#10 + Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]);
       // Mine order værdier.-
       lBusinessCentralSetup.OrderValue := '';
       // Select fields
       lBusinessCentralSetup.SelectValue := '';
 
       // Hent dem kostpriser til hovedvaren.
-      DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
+      DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup, lGetResponse, lContent, LF_BC_Version, FALSE);
+      AddToLog(Format('  Response: %s', [lContent]));
+      lLog := lLog + #13#10 + Format('  Response: %s', [lContent]);
 
       if DoContinueWithInsert then
       begin
@@ -958,6 +996,7 @@ var
         begin
           lReturnedRecordsFromBC := (lGetResponse as TkmCostprices).Value.Count;
           AddToLog(Format('  Returned records from BC %d', [lReturnedRecordsFromBC]));
+          lLog := lLog + #13#10 + Format('  Returned records from BC %d', [lReturnedRecordsFromBC]);
           // We have fetched some records. BArcode and Costprice (In DKK)
           // Time of handling this head item.
           lRegulationTime := NOW;
@@ -970,7 +1009,10 @@ var
             begin
               // If costprice from BC is 0 - skip
               DoContinue := TRUE;
-              AddToLogCostprice(Format('  Costprice from Business Central is %s on variant %s. Skipping. Variant %s', [lkmCostprice.UnitCost.ToString, lkmCostprice.VareId, lRecordUpdateToItem.ToString]));
+              AddToLogCostprice(Format('  Costprice from Business Central is %s on variant %s. Skipping. Variant %s', [lkmCostprice.UnitCost.ToString, lkmCostprice.VareId,
+                lRecordUpdateToItem.ToString]));
+              lLog := lLog + #13#10 + Format('  Costprice from Business Central is %s on variant %s. Skipping. Variant %s', [lkmCostprice.UnitCost.ToString, lkmCostprice.VareId,
+                lRecordUpdateToItem.ToString]);
             end
             else
             begin
@@ -984,6 +1026,7 @@ var
         begin
           DoContinue := TRUE;
           AddToLog(Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
+          lLog := lLog + #13#10 + Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]);
           Result := TRUE;
         end;
       end
@@ -998,6 +1041,7 @@ var
           '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
           '  JSON: ' + lJSONStr + #13#10;
         AddToLog(lErrotString);
+        lLog := lLog + #13#10 + lErrotString;
         AddToErrorLog(lErrotString, lUpdateCostpriceErrorFileName);
         WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3503, 1);
       end;
@@ -1007,8 +1051,8 @@ var
       lSkipCount := lSkipCount + lBatchSize;
 
       // Move to the next iteration
-      Inc(lIteration);
-    end; //While
+      INC(lIteration);
+    end; // While
 
     // Mark header as done if all went well.
     if DoContinue then
@@ -1017,6 +1061,7 @@ var
       // Commit
       if (trUpdateCostprice.Active) then
         trUpdateCostprice.Commit;
+      DoInsertEasyPOSLog(lLog);
     end
     else
     begin
@@ -1025,79 +1070,6 @@ var
         trUpdateCostprice.Rollback;
     end;
     Result := DoContinue;
-
-    // lBusinessCentralSetup.FilterValue := BuildFilterString;
-    // AddToLog(Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]));
-    // // Mine order værdier.-
-    // lBusinessCentralSetup.OrderValue := '';
-    // // Select fields
-    // lBusinessCentralSetup.SelectValue := '';
-    // // Hent dem kostpriser til hovedvaren.
-    // DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
-    //
-    // if DoContinueWithInsert then
-    // begin
-    // if (lGetResponse as TkmCostprices).Value.Count > 0 then
-    // begin
-    // // We have fetched some records. BArcode and Costprice (In DKK)
-    // // Time of handling this head item.
-    // lRegulationTime := NOW;
-    // DoContinue := TRUE;
-    // // Start transaction
-    // if (not(trUpdateCostprice.Active)) then
-    // trUpdateCostprice.StartTransaction;
-    // // Itereate through all returned variants
-    // for var lkmCostprice in (lGetResponse as TkmCostprices).Value do
-    // begin
-    // if (lkmCostprice.UnitCost = 0) then
-    // begin
-    // // If costprice from BC is 0 - skip
-    // DoContinue := TRUE;
-    // AddToLog(Format('  Costprice from Business Central is %s on variant %s. Skipping', [lkmCostprice.UnitCost.ToString, lkmCostprice.VareId]));
-    // end
-    // else
-    // begin
-    // if DoContinue then
-    // // Update headitem and varaints in all departments with new cost price
-    // DoContinue := UpdateCostpriceOnAllVariantInAllDepartments(lkmCostprice.VareId, lkmCostprice.UnitCost);
-    // end;
-    // end;
-    // // Mark header as done if all went well.
-    // if DoContinue then
-    // begin
-    // MarkHeadItemAsDone;
-    // // Commit
-    // if (trUpdateCostprice.Active) then
-    // trUpdateCostprice.Commit;
-    // end
-    // else
-    // begin
-    // // Commit
-    // if (trUpdateCostprice.Active) then
-    // trUpdateCostprice.Rollback;
-    // end;
-    // Result := DoContinue;
-    // end
-    // else
-    // begin
-    // AddToLog(Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
-    // Result := TRUE;
-    // end;
-    // end
-    // else
-    // begin
-    // // Do not continue. Some error from BC when trying to get a record
-    // Result := FALSE;
-    // lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
-    // '  EasyPOS Head item numbmer: ' + QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString + #13#10 +
-    // '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
-    // '  Message: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
-    // '  JSON: ' + lJSONStr + #13#10;
-    // AddToLog(lErrotString);
-    // AddToErrorLog(lErrotString, lUpdateCostpriceErrorFileName);
-    // WriteEventLog(lErrotString, '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3503, 1);
-    // end;
-    // FReeAndNil(lGetResponse);
   end;
 
 begin
@@ -1141,7 +1113,7 @@ begin
             RoutineCanceled := FALSE;
             While (Not(QFetchItemsUpdateCostprice.Eof)) AND (NOT(RoutineCanceled)) AND (lNumberOfCostpriceUpdates < NumberOfItemsToHandle) do
             begin
-              Inc(lNumberOfCostpriceUpdates);
+              INC(lNumberOfCostpriceUpdates);
               RoutineCanceled := NOT UpdateCostpriceOnItemInEasyPOS;
               if NOT RoutineCanceled then
               begin
@@ -1517,7 +1489,7 @@ var
 
           lJSONStr := GetDefaultSerializer.SerializeObject(lkmCashstatement);
 
-          Inc(lExportCounter);
+          INC(lExportCounter);
 
           // Add to log
           AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
@@ -1542,7 +1514,7 @@ var
               '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
               '  JSON: ' + lJSONStr + #13#10;
             AddToLog(lErrotString);
-            Inc(lErrorCounter);
+            INC(lErrorCounter);
             AddToErrorLog(lErrotString, lErrorFileName);
           end;
           FReeAndNil(lResponse);
@@ -1786,7 +1758,7 @@ var
         if DoContinue then
         begin
           // Inc amount of transferred head items
-          Inc(lExportCounterHeadItems);
+          INC(lExportCounterHeadItems);
           // No error or test
           ContinueWithVariants := TRUE;
         end
@@ -1798,7 +1770,7 @@ var
           // ERROR - Do not continues with variants
           ContinueWithVariants := FALSE;
           // Insert error counter
-          Inc(lErrorCounter);
+          INC(lErrorCounter);
           // Build error string
           lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
             '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
@@ -1865,7 +1837,7 @@ var
         if DoContinue then
         begin
           // Inc amount of transferred head item Varinat
-          Inc(lExportCounterHeadItemVariants);
+          INC(lExportCounterHeadItemVariants);
           // No error or test
           ContinueWithVariants := TRUE;
         end
@@ -1877,7 +1849,7 @@ var
           // ERROR - Do not continues with variants
           ContinueWithVariants := FALSE;
           // Insert error counter
-          Inc(lErrorCounter);
+          INC(lErrorCounter);
           // Build error string
           lErrorString := 'Unexpected error when inserting head item in Business Central. ' + #13#10 +
             '  Head item number: ' + QFetchItems.FieldByName('VareID').AsString + #13#10 +
@@ -1971,7 +1943,7 @@ var
         begin
           // No error
           // Increment exported variants
-          Inc(lExportCounterVariants);
+          INC(lExportCounterVariants);
         end
         else
         begin
@@ -1979,7 +1951,7 @@ var
             (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
             (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
           // ERROR
-          Inc(lErrorCounter);
+          INC(lErrorCounter);
           // Build errorstring
           lErrorString := 'Unexpected error while inserting variant in Business Central. ' + #13#10 +
             '  Variant: ' + QFetchItems.FieldByName('VariantID').AsString + #13#10 +
@@ -2437,7 +2409,7 @@ var
 
           lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemSale);
 
-          Inc(lNumberOfExportedSalesTransactions);
+          INC(lNumberOfExportedSalesTransactions);
 
           // Add to log
           AddToLog(Format('  Sale transaction record to transfer: %d - %s', [lNumberOfExportedSalesTransactions, lJSONStr]));
@@ -2747,7 +2719,7 @@ var
 
           lJSONStr := GetDefaultSerializer.SerializeObject(lkmItemMove);
 
-          Inc(lNumberOfExportedMovementsTransactions);
+          INC(lNumberOfExportedMovementsTransactions);
           // Add to log
           AddToLog(Format('  Movement transaction record to transfer: %d - %s', [lNumberOfExportedMovementsTransactions, lJSONStr]));
           if OnlyTestRoutine then
