@@ -986,7 +986,11 @@ var
       lBusinessCentralSetup.SelectValue := '';
 
       // Hent dem kostpriser til hovedvaren.
-      DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup, lGetResponse, lContent, LF_BC_Version, FALSE);
+      DoContinueWithInsert := lBusinessCentral.GetkmCostprice(lBusinessCentralSetup,
+        lGetResponse,
+        LF_BC_Version,
+        FALSE,
+        lContent);
       AddToLog(Format('  Response: %s', [lContent]));
       lLog := lLog + #13#10 + Format('  Response: %s', [lContent]);
 
@@ -2314,6 +2318,7 @@ var
     lErrotString: string;
     DoContinueWithInsert: Boolean;
     lGetResponse: TBusinessCentral_Response;
+    lContent: string;
 
     function DoMarkSalesTransactionsAsExported: Boolean;
     begin
@@ -2371,7 +2376,7 @@ var
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
     // Hent dem.
-    DoContinueWithInsert := lBusinessCentral.GetkmItemSales(lBusinessCentralSetup, lGetResponse, LF_BC_Version);
+    DoContinueWithInsert := lBusinessCentral.GetkmItemSales(lBusinessCentralSetup, lGetResponse, lContent, LF_BC_Version);
 
     if DoContinueWithInsert then
     begin
