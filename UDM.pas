@@ -110,6 +110,7 @@ type
     LF_BC_Version: Integer;
     /// This is what BC throws when we needs to take a break and not use API so much
     FLastDateTimeForStatusCode503: TDateTime;
+    FLastStatusCode: Integer;
 
     function InitialilzeProgram: Boolean;
     procedure DoHandleEksportToBusinessCentral;
@@ -131,6 +132,7 @@ type
     { Public declarations }
     iniFile: TIniFile;
     property LastDateTimeForStatusCode503: TDateTime read FLastDateTimeForStatusCode503 write FLastDateTimeForStatusCode503;
+    property LastStatusCode: Integer read FLastStatusCode write FLastStatusCode;
     procedure AddToLog(aStringToWriteToLogFile: String);
     procedure AddToLogCostprice(aStringToWriteToLogFile: String);
   end;
@@ -175,6 +177,7 @@ var
   MailContent: TStringList;
   aError: string;
   lUseTSL: Boolean;
+  lDoSendMail: Boolean;
 
   procedure SetupMailSettings(var aSMTPSetup: TSendEMailSMTPSetup; var aMailSetup: TSendEMailMailSetup);
   begin
@@ -197,94 +200,128 @@ var
 begin
   AddToLog('  DoMailFile - START');
 
-  lFromName := iniFile.ReadString('MAIL', 'From name', '');
-  lFromMail := iniFile.ReadString('MAIL', 'From mail', '');
-  lReplyName := iniFile.ReadString('MAIL', 'Reply name', '');
-  lReplyMail := iniFile.ReadString('MAIL', 'Reply mail', '');
-  lRecipient := iniFile.ReadString('MAIL', 'Recipient Mail', '');
-  lSubject := iniFile.ReadString('MAIL', 'Subject', '');
-  lHost := iniFile.ReadString('MAIL', 'Host', '');
-  lPort := iniFile.ReadInteger('MAIL', 'Port', 587);
-  lUsername := iniFile.ReadString('MAIL', 'Username', '');
-  lPassword := iniFile.ReadString('MAIL', 'Password', '');
-  lUseTSL := iniFile.ReadBool('MAIL', 'UseTSL', FALSE);
-
-  AddToLog('    Filename: ' + aFileToAttach);
-  AddToLog('    Port: ' + lPort.ToString);
-  AddToLog('    Host: ' + lHost);
-  AddToLog('    MailFromName: ' + lFromName);
-  AddToLog('    MailFromMail: ' + lFromMail);
-  AddToLog('    MailReplyToName: ' + lReplyName);
-  AddToLog('    MailReplyToMail: ' + lReplyMail);
-  AddToLog('    MailSubject: ' + lSubject);
-  AddToLog('    MailReciever: ' + lRecipient);
-
-  Result := FALSE;
-  if (lRecipient <> '') AND (lHost <> '') then
+  if FLastStatusCode = 503 then
   begin
-    // CReate mail
-    AddToLog('    Create mailsetup');
-    lSendEMailMailSetup := TSendEMailMailSetup.Create(nil);
-    try
-      // Create SMTP
-      AddToLog('    Create smtpsetup');
-      lSendEMailSMTPSetup := TSendEMailSMTPSetup.Create(nil);
+//    //503 is coming from Business central when it will not accept more incoming calls for a while
+//    if FLastDateTimeForStatusCode503<(NOW-EncodeTime(0,5,0,0)) then
+//    begin
+//      //Its benn more than 5 minutes sinse last 503 - Do send mail
+//      lDoSendMail := TRUE;
+//    end
+//    else
+//    begin
+      //We do not want any mail of 503.
+      //Just means we have to delay a little before continue
+
+      //For now we alwas send a email
+      lDoSendMail := TRUE;
+//    end;
+  end
+  else
+  begin
+    lDoSendMail := TRUE;
+  end;
+
+  AddToLog(Format('  Last statuscode: %s. DoSendMail: %s',[FLastStatusCode.ToString, lDoSendMail.ToString(true)]));
+  if lDoSendMail then
+  begin
+    lFromName := iniFile.ReadString('MAIL', 'From name', '');
+    lFromMail := iniFile.ReadString('MAIL', 'From mail', '');
+    lReplyName := iniFile.ReadString('MAIL', 'Reply name', '');
+    lReplyMail := iniFile.ReadString('MAIL', 'Reply mail', '');
+    lRecipient := iniFile.ReadString('MAIL', 'Recipient Mail', '');
+    lSubject := iniFile.ReadString('MAIL', 'Subject', '');
+    lHost := iniFile.ReadString('MAIL', 'Host', '');
+    lPort := iniFile.ReadInteger('MAIL', 'Port', 587);
+    lUsername := iniFile.ReadString('MAIL', 'Username', '');
+    lPassword := iniFile.ReadString('MAIL', 'Password', '');
+    lUseTSL := iniFile.ReadBool('MAIL', 'UseTSL', FALSE);
+
+    AddToLog('    Filename: ' + aFileToAttach);
+    AddToLog('    Port: ' + lPort.ToString);
+    AddToLog('    Host: ' + lHost);
+    AddToLog('    MailFromName: ' + lFromName);
+    AddToLog('    MailFromMail: ' + lFromMail);
+    AddToLog('    MailReplyToName: ' + lReplyName);
+    AddToLog('    MailReplyToMail: ' + lReplyMail);
+    AddToLog('    MailSubject: ' + lSubject);
+    AddToLog('    MailReciever: ' + lRecipient);
+
+    Result := FALSE;
+    if (lRecipient <> '') AND (lHost <> '') then
+    begin
+      // CReate mail
+      AddToLog('    Create mailsetup');
+      lSendEMailMailSetup := TSendEMailMailSetup.Create(nil);
       try
-        // Set values.
-        AddToLog('    SetupMailSettings');
-        SetupMailSettings(lSendEMailSMTPSetup, lSendEMailMailSetup);
-
-        AddToLog('    Set reply to, receiver, subject and attachment');
-        lSendEMailMailSetup.ReplyToEMail := lReplyMail;
-        lSendEMailMailSetup.ReplyToName := lReplyName;
-        lSendEMailMailSetup.ReceivingEMail := lRecipient;
-        lSendEMailMailSetup.EmailSubject := lSubject + ' - ' + aSection;
-        lSendEMailMailSetup.Attachment := aFileToAttach;
-        MailContent := TStringList.Create;
+        // Create SMTP
+        AddToLog('    Create smtpsetup');
+        lSendEMailSMTPSetup := TSendEMailSMTPSetup.Create(nil);
         try
-          AddToLog('    Set content of mail');
-          MailContent.Add(aText);
-          lSendEMailMailSetup.EmailContent := MailContent;
+          // Set values.
+          AddToLog('    SetupMailSettings');
+          SetupMailSettings(lSendEMailSMTPSetup, lSendEMailMailSetup);
 
-          // Create Send mail
-          AddToLog('    Create mail');
-          lSendEMail := TSendEMail.Create(lSendEMailSMTPSetup);
+          AddToLog('    Set reply to, receiver, subject and attachment');
+          lSendEMailMailSetup.ReplyToEMail := lReplyMail;
+          lSendEMailMailSetup.ReplyToName := lReplyName;
+          lSendEMailMailSetup.ReceivingEMail := lRecipient;
+          lSendEMailMailSetup.EmailSubject := lSubject + ' - ' + aSection;
+          lSendEMailMailSetup.Attachment := aFileToAttach;
+          MailContent := TStringList.Create;
           try
-            try
-              AddToLog(Format('    Send mail to %s', [lRecipient]));
-              Result := lSendEMail.SendEMail(lSendEMailMailSetup, aError);
-              if Result then
-              begin
-                AddToLog(Format('    Mail sendt', []));
-              end
-              else
-              begin
-                AddToLog(Format('    Error: %s', [aError]));
-              end;
-            except
-              On E: Exception do
-              begin
-                AddToLog('  FEJL. Kan ikke afsende mail. ');
-                AddToLog(E.Message);
-              end;
-            end;
+            AddToLog('    Set content of mail');
+            MailContent.Add(Format('Statuscode: %s',[FLastStatusCode.ToString]));
+            if FLastStatusCode=503 then
+              MailContent.Add('503 Service Unavailable - The server cannot handle the request (because it is overloaded or down for maintenance). Generally, this is a temporary state');
+            MailContent.Add(' ');
+            MailContent.Add(aText);
+            lSendEMailMailSetup.EmailContent := MailContent;
 
+            // Create Send mail
+            AddToLog('    Create mail');
+            lSendEMail := TSendEMail.Create(lSendEMailSMTPSetup);
+            try
+              try
+                AddToLog(Format('    Send mail to %s', [lRecipient]));
+                Result := lSendEMail.SendEMail(lSendEMailMailSetup, aError);
+                if Result then
+                begin
+                  AddToLog(Format('    Mail sendt', []));
+                end
+                else
+                begin
+                  AddToLog(Format('    Error: %s', [aError]));
+                end;
+              except
+                On E: Exception do
+                begin
+                  AddToLog('  FEJL. Kan ikke afsende mail. ');
+                  AddToLog(E.Message);
+                end;
+              end;
+            finally
+              lSendEMail.Free;
+            end;
           finally
-            lSendEMail.Free;
+            MailContent.Free;
           end;
         finally
-          MailContent.Free;
+          lSendEMailSMTPSetup.Free;
         end;
       finally
-        lSendEMailSMTPSetup.Free;
+        lSendEMailMailSetup.Free;
       end;
-    finally
-      lSendEMailMailSetup.Free;
+    end
+    else
+    begin
+      AddToLog('  Host or reciever not set');
     end;
   end
   else
   begin
-    AddToLog('  Host or reciever not set');
+    Result := TRUE;
+    AddToLog('  We got a statuscode 503, and do not send email.');
   end;
   AddToLog('  DoMailFile - SLUT');
 end;
@@ -1047,6 +1084,7 @@ var
         // Do not continue. Some error from BC when trying to get a record
         DoContinue := FALSE;
         Result := FALSE;
+        FLastStatusCode := (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode;
         if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
           FLastDateTimeForStatusCode503 := NOW;
         lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
@@ -1522,6 +1560,7 @@ var
           else
           begin
             Result := FALSE;
+            FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
             if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
               FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
@@ -1548,6 +1587,7 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      FLastStatusCode := (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode;
       if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
         FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking financial record in BC ' + #13#10 +
@@ -1782,6 +1822,7 @@ var
         end
         else
         begin
+          FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
           if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
             FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
@@ -1863,6 +1904,7 @@ var
         end
         else
         begin
+          FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
           if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
             FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
@@ -1969,6 +2011,7 @@ var
         end
         else
         begin
+          FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
           if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
             FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
@@ -2457,6 +2500,7 @@ var
           begin
             Result := FALSE;
 
+            FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
             if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
               FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Unexpected error when inserting sale transaction in BC ' + #13#10 +
@@ -2484,6 +2528,7 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      FLastStatusCode := (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode;
       if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
         FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking sale transaction in BC ' + #13#10 +
@@ -2769,6 +2814,7 @@ var
           begin
             Result := FALSE;
 
+            FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
             if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
               FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Unexpected error when inserting movement transaction in BC ' + #13#10 +
@@ -2795,6 +2841,7 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      FLastStatusCode := (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode;
       if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
         FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking movement transaction in BC ' + #13#10 +
