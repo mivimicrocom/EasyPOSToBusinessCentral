@@ -43,7 +43,6 @@ begin
     Application.Initialize;
   Application.CreateForm(TDM, DM);
   Application.CreateForm(TEasyPOSToBusinessCentralService, EasyPOSToBusinessCentralService);
-  {$ENDIF}
+{$ENDIF}
   Application.Run;
-
 end.

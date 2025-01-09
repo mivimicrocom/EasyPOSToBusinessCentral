@@ -41,7 +41,11 @@ uses
   FireDAC.DApt.Intf,
   FireDAC.DApt,
   FireDAC.Comp.DataSet,
-  FireDAC.Phys.IBBase;
+  FireDAC.Phys.IBBase,
+  REST.Types,
+  Data.Bind.Components,
+  Data.Bind.ObjectScope,
+  REST.Client;
 
 type
   TDM = class(TDataModule)
@@ -102,7 +106,10 @@ type
     LF_BC_ACTIVECOMPANYID: String;
     LF_BC_Environment: string;
     LF_BC_Online: Boolean;
-    LF_BC_Version: Integer; // 0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication
+    /// 0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication
+    LF_BC_Version: Integer;
+    /// This is what BC throws when we needs to take a break and not use API so much
+    FLastDateTimeForStatusCode503: TDateTime;
 
     function InitialilzeProgram: Boolean;
     procedure DoHandleEksportToBusinessCentral;
@@ -123,6 +130,7 @@ type
   public
     { Public declarations }
     iniFile: TIniFile;
+    property LastDateTimeForStatusCode503: TDateTime read FLastDateTimeForStatusCode503 write FLastDateTimeForStatusCode503;
     procedure AddToLog(aStringToWriteToLogFile: String);
     procedure AddToLogCostprice(aStringToWriteToLogFile: String);
   end;
@@ -1039,6 +1047,8 @@ var
         // Do not continue. Some error from BC when trying to get a record
         DoContinue := FALSE;
         Result := FALSE;
+        if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+          FLastDateTimeForStatusCode503 := NOW;
         lErrotString := 'Unexpected error when fetching costprice in BC ' + #13#10 +
           '  EasyPOS Head item numbmer: ' + QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString + #13#10 +
           '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -1512,6 +1522,8 @@ var
           else
           begin
             Result := FALSE;
+            if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+              FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
               '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
               '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -1536,6 +1548,8 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+        FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking financial record in BC ' + #13#10 +
         '  ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
         '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -1768,6 +1782,8 @@ var
         end
         else
         begin
+          if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+            FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
             (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
             (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
@@ -1847,6 +1863,8 @@ var
         end
         else
         begin
+          if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+            FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
             (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
             (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
@@ -1951,6 +1969,8 @@ var
         end
         else
         begin
+          if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+            FLastDateTimeForStatusCode503 := NOW;
           AddToLog(Format('    ERROR (more in error file): %s - %s', [
             (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString,
             (lResponse as TBusinessCentral_ErrorResponse).StatusText]));
@@ -2437,6 +2457,8 @@ var
           begin
             Result := FALSE;
 
+            if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+              FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Unexpected error when inserting sale transaction in BC ' + #13#10 +
               '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
               '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -2462,6 +2484,8 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+        FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking sale transaction in BC ' + #13#10 +
         '  EP ID: ' + QFetchSalesTransactions.FieldByName('EPID').AsString + #13#10 +
         '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -2745,6 +2769,8 @@ var
           begin
             Result := FALSE;
 
+            if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+              FLastDateTimeForStatusCode503 := NOW;
             lErrotString := 'Unexpected error when inserting movement transaction in BC ' + #13#10 +
               '  EP TransID: ' + QFetchMovementsTransactions.FieldByName('FlytningsID').AsString + #13#10 +
               '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
@@ -2769,6 +2795,8 @@ var
     begin
       // Do not continue. Some error from BC when trying to get a record
       Result := FALSE;
+      if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
+        FLastDateTimeForStatusCode503 := NOW;
       lErrotString := 'Unexpected error when checking movement transaction in BC ' + #13#10 +
         '  EP ID: ' + QFetchMovementsTransactions.FieldByName('EPID').AsString + #13#10 +
         '  Code: ' + (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +

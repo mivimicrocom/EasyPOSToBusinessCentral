@@ -65,6 +65,8 @@ end;
 
 procedure TEasyPOSToBusinessCentralService.ServiceStart(Sender: TService; var Started: Boolean);
 begin
+  //Initiate to "never"
+  DM.LastDateTimeForStatusCode503 := 0;
   DM.tiTimer.Interval := 2000;
   DM.tiTimer.Enabled := TRUE;
 end;
