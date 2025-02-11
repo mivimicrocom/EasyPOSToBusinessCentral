@@ -105,9 +105,11 @@ type
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
     LF_BC_Environment: string;
-    LF_BC_Online: Boolean;
-    /// 0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication
-    LF_BC_Version: Integer;
+    LF_BC_Customer: string; //Here we set the name of the customer. As of 11-02-2025 we have Kaufmann and nyform.
+//    LC_BC_CustomerNo: Integer; //Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
+//    LF_BC_Online: Boolean;
+//    /// 0: 0,1: Kaufmann.   2,3: nyform
+    LF_BC_Version: Integer; //Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
     /// This is what BC throws when we needs to take a break and not use API so much
     FLastDateTimeForStatusCode503: TDateTime;
     FLastStatusCode: Integer;
@@ -553,18 +555,18 @@ end;
 
 Function TDM.FetchNextTransID(aTransactionIDUSedFor: String): Integer;
 begin
-{$IFDEF DEBUG}
-  AddToLog(Format('  DEBUG Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
-  Result := 1234567;
-  AddToLog(Format('    Transaction ID: %d.', [Result]))
-{$ENDIF}
-{$IFDEF RELEASE}
+//{$IFDEF DEBUG}
+//  AddToLog(Format('  DEBUG Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
+//  Result := 1234567;
+//  AddToLog(Format('    Transaction ID: %d.', [Result]))
+//{$ENDIF}
+//{$IFDEF RELEASE}
     AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
   AddToLog(Format('    Transaction ID: %d.', [Result]))
-{$ENDIF}
+//{$ENDIF}
 end;
 
 function TDM.FetchBCSettings: Boolean;
@@ -581,15 +583,29 @@ begin
   LF_BC_USERNAME := iniFile.ReadString('BUSINESS CENTRAL', 'BC_USERNAME', '');
   LF_BC_PASSWORD := iniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
   LF_BC_ACTIVECOMPANYID := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
-  LF_BC_Online := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
-  if LF_BC_Online then
+  LF_BC_Customer := iniFile.ReadString('BUSINESS CENTRAL', 'Online Business Central', '');
+  if LF_BC_Customer.ToUpper='KAUFMANN' then
+  begin
+    LF_BC_Version := 0;
+  end
+  else if LF_BC_Customer.ToUpper='NYFORM' then
   begin
     LF_BC_Version := 2;
   end
   else
   begin
-    LF_BC_Version := 0;
+    LF_BC_Version := -1;
   end;
+
+//  LF_BC_Online := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
+//  if LF_BC_Online then
+//  begin
+//    LF_BC_Version := 2;
+//  end
+//  else
+//  begin
+//    LF_BC_Version := 0;
+//  end;
 
   if (LF_BC_BASEURL = '') AND
     (LF_BC_PORT_Int = 0) AND
@@ -631,7 +647,8 @@ begin
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
   AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
-  AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
+//  AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
+  AddToLog('  LF_BC_Customer: ' + LF_BC_Customer + '   LF_BC_Version: ' + LF_BC_Version.ToString);
   AddToLog(Format('Business Central version: %s (0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication) ', [LF_BC_Version.ToString]));
 
   Result :=
@@ -980,9 +997,9 @@ var
       if (NOT(trUpdateCostprice.Active)) then
         trUpdateCostprice.StartTransaction;
 
-      INS_WEBLogEasyPOS.ParamByName('HVAD').AsString := 'Kaufmann Windows Service';
-      INS_WEBLogEasyPOS.ParamByName('HVEM').AsString := 'Kaufmann Windows Service';
-      INS_WEBLogEasyPOS.ParamByName('HVOR').AsString := 'Kaufmann Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('HVAD').AsString := 'EasyPOS to BC Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('HVEM').AsString := 'EasyPOS to BC Windows Service';
+      INS_WEBLogEasyPOS.ParamByName('HVOR').AsString := 'EasyPOS to BC Windows Service';
       INS_WEBLogEasyPOS.ParamByName('DATO_STEMPEL').AsDateTime := NOW;
       INS_WEBLogEasyPOS.ParamByName('SQLSETNING').AsString := aLog;
       INS_WEBLogEasyPOS.ExecSQL;
@@ -1545,12 +1562,12 @@ var
 
           // Add to log
           AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
-{$IFDEF RELEASE}
+//{$IFDEF RELEASE}
           DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE, LF_BC_Version));
-{$ELSE}
-          DoContinue := TRUE;
-          AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
-{$ENDIF}
+//{$ELSE}
+//          DoContinue := TRUE;
+//          AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
+//{$ENDIF}
           if DoContinue then
           begin
             iniFile.WriteDateTime('FinancialRecords', 'Last run', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
@@ -2092,7 +2109,7 @@ begin
         LF_BC_PASSWORD,
         LF_BC_Version);
       try
-        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL]));
+        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL(1)]));
         AddToLog('  TBusinessCentral.Create');
         lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
         try

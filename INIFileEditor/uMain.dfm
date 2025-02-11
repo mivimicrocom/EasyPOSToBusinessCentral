@@ -25,9 +25,9 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = TabSheet10
+    ActivePage = TabSheet1
     Align = alClient
-    TabIndex = 9
+    TabIndex = 1
     TabOrder = 0
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -93,7 +93,7 @@ object frmMain: TfrmMain
         Top = 355
         Width = 200
         Height = 23
-        Text = ''
+        Text = 'Set Firebird password'
         PasswordChar = '*'
         TabOrder = 5
       end
@@ -102,7 +102,7 @@ object frmMain: TfrmMain
         Top = 432
         Width = 200
         Height = 23
-        Text = ''
+        Text = 'Set EasyPOS Department '
         TabOrder = 6
       end
       object edMachine: TRzEdit
@@ -110,7 +110,7 @@ object frmMain: TfrmMain
         Top = 509
         Width = 200
         Height = 23
-        Text = ''
+        Text = 'Set EasyPOS Machine'
         TabOrder = 7
       end
       object edTimer: TRzNumericEdit
@@ -129,6 +129,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 2
+        TextHint = 'Select folder where logs are stored'
       end
       object edDatabase: TRzEdit
         Left = 16
@@ -137,6 +138,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 3
+        TextHint = 'Set EasyPOS Connection string'
       end
       object edUser: TRzEdit
         Left = 16
@@ -145,6 +147,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 4
+        TextHint = 'Set Firebird user'
       end
       object cbOnlyTest: TRzCheckBox
         Left = 16
@@ -186,57 +189,64 @@ object frmMain: TfrmMain
       end
       object RzLabel4: TRzLabel
         Left = 24
-        Top = 85
+        Top = 84
         Width = 97
         Height = 15
         Caption = 'Port (0 is disabled)'
       end
       object RzLabel5: TRzLabel
         Left = 24
-        Top = 156
-        Width = 122
+        Top = 153
+        Width = 36
         Height = 15
-        Caption = 'Company URL / Tenant'
+        Caption = 'Tenant'
       end
       object RzLabel9: TRzLabel
         Left = 24
-        Top = 290
-        Width = 109
+        Top = 292
+        Width = 45
         Height = 15
-        Caption = 'Username / Client ID'
+        Caption = 'Client ID'
       end
       object RzLabel10: TRzLabel
         Left = 24
-        Top = 360
-        Width = 145
+        Top = 361
+        Width = 84
         Height = 15
-        Caption = 'Password / Client Password'
+        Caption = 'Client Password'
       end
       object RzLabel11: TRzLabel
         Left = 24
-        Top = 431
+        Top = 430
         Width = 88
         Height = 15
         Caption = 'Active Company'
       end
       object RzLabel41: TRzLabel
         Left = 24
-        Top = 221
+        Top = 222
         Width = 68
         Height = 15
         Caption = 'Environment'
       end
+      object RzLabel43: TRzLabel
+        Left = 24
+        Top = 499
+        Width = 52
+        Height = 15
+        Caption = 'Customer'
+      end
       object edBCBaseURL: TRzEdit
         Left = 24
-        Top = 36
+        Top = 40
         Width = 665
         Height = 23
-        Text = ''
+        Text = 'Set Business Central baseURL'
         TabOrder = 0
       end
       object edBCPOrt: TRzNumericEdit
         Left = 24
-        Top = 103
+        Top = 107
         Width = 65
         Height = 23
         TabOrder = 1
@@ -245,51 +255,55 @@ object frmMain: TfrmMain
       end
       object edBCCompanyURL: TRzEdit
         Left = 24
-        Top = 171
+        Top = 175
         Width = 665
         Height = 23
         Text = ''
         TabOrder = 2
+        TextHint = 'Set Business Central tenant'
       end
       object edBCUser: TRzEdit
         Left = 24
-        Top = 307
+        Top = 314
         Width = 665
         Height = 23
         Text = ''
         TabOrder = 4
+        TextHint = 'Set client ID'
       end
       object edBCPassword: TRzEdit
         Left = 24
-        Top = 375
+        Top = 382
         Width = 665
         Height = 23
-        Text = ''
+        Text = 'Set client password'
         TabOrder = 5
       end
       object edBCActiveCompany: TRzEdit
         Left = 24
-        Top = 449
+        Top = 450
         Width = 665
         Height = 23
-        Text = ''
+        Text = 'Set active company in Business Central'
         TabOrder = 6
-      end
-      object cbOnlineBusinessCentral: TCheckBox
-        Left = 24
-        Top = 511
-        Width = 345
-        Height = 17
-        Caption = 'Online Business Central med OAuth2 authentication'
-        TabOrder = 7
       end
       object edEnvironment: TRzEdit
         Left = 24
-        Top = 239
+        Top = 243
         Width = 665
         Height = 23
         Text = ''
         TabOrder = 3
+        TextHint = 'Set Business Central Environment'
+      end
+      object edBusinessCentralKunde: TRzEdit
+        Left = 24
+        Top = 518
+        Width = 665
+        Height = 23
+        Text = ''
+        TabOrder = 7
+        TextHint = 'Set the name of the customer'
       end
     end
     object TabSheet2: TRzTabSheet
@@ -371,6 +385,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 0
+        TextHint = 'Set the name of the sender when an errormessage is send'
       end
       object edMailSenderMail: TRzEdit
         Left = 32
@@ -379,6 +394,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 1
+        TextHint = 'Set the mail from which an errormessage is send'
       end
       object edMailReplyToName: TRzEdit
         Left = 32
@@ -387,6 +403,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 2
+        TextHint = 'Set the reply to name when an errormessage is send'
       end
       object edMailReplyToMail: TRzEdit
         Left = 32
@@ -395,6 +412,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 3
+        TextHint = 'Set the reply to email when an errormessage is send'
       end
       object edMailReciever: TRzEdit
         Left = 32
@@ -403,6 +421,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 4
+        TextHint = 'Set recipients mail (divided by ; if more than one)'
       end
       object edMailSubject: TRzEdit
         Left = 32
@@ -411,6 +430,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 5
+        TextHint = 'Set the subject of the mail'
       end
       object edMailSMTPHost: TRzEdit
         Left = 32
@@ -419,6 +439,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 6
+        TextHint = 'Set the SMTP host'
       end
       object edMailSMTPPort: TRzNumericEdit
         Left = 32
@@ -435,6 +456,7 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 8
+        TextHint = 'Set the SMTP Username'
       end
       object edMailSMTPPassword: TRzEdit
         Left = 32
@@ -443,12 +465,13 @@ object frmMain: TfrmMain
         Height = 23
         Text = ''
         TabOrder = 9
+        TextHint = 'Set the SMTP password'
       end
       object cbUseTLS: TRzCheckBox
         Left = 120
         Top = 475
-        Width = 59
-        Height = 17
+        Width = 64
+        Height = 19
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -456,13 +479,11 @@ object frmMain: TfrmMain
     end
     object TabSheet3: TRzTabSheet
       Caption = 'Syncronize'
-      ExplicitLeft = 2
-      ExplicitTop = 23
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 112
-        Height = 19
+        Width = 108
+        Height = 17
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -470,8 +491,8 @@ object frmMain: TfrmMain
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
         Top = 75
-        Width = 170
-        Height = 19
+        Width = 166
+        Height = 17
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -479,8 +500,8 @@ object frmMain: TfrmMain
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
         Top = 119
-        Width = 175
-        Height = 19
+        Width = 171
+        Height = 17
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -488,8 +509,8 @@ object frmMain: TfrmMain
       object cbSyncMovements: TRzCheckBox
         Left = 16
         Top = 162
-        Width = 208
-        Height = 19
+        Width = 204
+        Height = 17
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -497,8 +518,8 @@ object frmMain: TfrmMain
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
         Top = 206
-        Width = 235
-        Height = 19
+        Width = 231
+        Height = 17
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -506,8 +527,8 @@ object frmMain: TfrmMain
       object cbSyncCostpriceToEasyPOS: TRzCheckBox
         Left = 16
         Top = 250
-        Width = 316
-        Height = 19
+        Width = 312
+        Height = 17
         Caption = 'Syncronize costprices from Business Central to EasyPOS'
         State = cbUnchecked
         TabOrder = 5
@@ -855,8 +876,6 @@ object frmMain: TfrmMain
     end
     object TabSheet10: TRzTabSheet
       Caption = 'Costprice from Business Central'
-      ExplicitLeft = -15
-      ExplicitTop = 23
       object RzLabel42: TRzLabel
         Left = 40
         Top = 50
