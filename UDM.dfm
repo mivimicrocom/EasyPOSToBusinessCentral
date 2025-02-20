@@ -67,7 +67,8 @@ object DM: TDM
       '    POSTERINGER.belob <> 0 AND'
       '    POSTERINGER.Dato >= :PStartDato AND'
       '    POSTERINGER.Dato <= :PSlutDato AND'
-      '    POSTERINGER.Behandlet = 0'
+      '    POSTERINGER.Behandlet = 0 AND'
+      '    CHAR_LENGTH(POSTERINGER.AFDELING_ID) = 3'
       'ORDER BY'
       '    POSTERINGER.Dato ASC')
     Left = 72
