@@ -25,9 +25,9 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = TabSheet1
+    ActivePage = TabSheet4
     Align = alClient
-    TabIndex = 1
+    TabIndex = 5
     TabOrder = 0
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -152,8 +152,8 @@ object frmMain: TfrmMain
       object cbOnlyTest: TRzCheckBox
         Left = 16
         Top = 568
-        Width = 357
-        Height = 19
+        Width = 353
+        Height = 17
         Caption = 
           'Only run as test (noting will be syncronized to Business Central' +
           ')'
@@ -470,8 +470,8 @@ object frmMain: TfrmMain
       object cbUseTLS: TRzCheckBox
         Left = 120
         Top = 475
-        Width = 64
-        Height = 19
+        Width = 60
+        Height = 17
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -482,8 +482,8 @@ object frmMain: TfrmMain
       object cbSyncItems: TRzCheckBox
         Left = 16
         Top = 32
-        Width = 108
-        Height = 17
+        Width = 112
+        Height = 19
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -491,8 +491,8 @@ object frmMain: TfrmMain
       object cbSyncFinancialRecords: TRzCheckBox
         Left = 16
         Top = 75
-        Width = 166
-        Height = 17
+        Width = 170
+        Height = 19
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -500,8 +500,8 @@ object frmMain: TfrmMain
       object cbSyncSalesTrans: TRzCheckBox
         Left = 16
         Top = 119
-        Width = 171
-        Height = 17
+        Width = 175
+        Height = 19
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -509,8 +509,8 @@ object frmMain: TfrmMain
       object cbSyncMovements: TRzCheckBox
         Left = 16
         Top = 162
-        Width = 204
-        Height = 17
+        Width = 208
+        Height = 19
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -518,8 +518,8 @@ object frmMain: TfrmMain
       object cbSyncStockRegulations: TRzCheckBox
         Left = 16
         Top = 206
-        Width = 231
-        Height = 17
+        Width = 235
+        Height = 19
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -527,8 +527,8 @@ object frmMain: TfrmMain
       object cbSyncCostpriceToEasyPOS: TRzCheckBox
         Left = 16
         Top = 250
-        Width = 312
-        Height = 17
+        Width = 316
+        Height = 19
         Caption = 'Syncronize costprices from Business Central to EasyPOS'
         State = cbUnchecked
         TabOrder = 5
@@ -606,6 +606,8 @@ object frmMain: TfrmMain
     end
     object TabSheet4: TRzTabSheet
       Caption = 'Financial records'
+      ExplicitLeft = 0
+      ExplicitTop = 23
       object RzLabel26: TRzLabel
         Left = 32
         Top = 42
@@ -656,6 +658,15 @@ object frmMain: TfrmMain
         Enabled = False
         ReadOnly = True
         TabOrder = 2
+      end
+      object cbVoucherNumberAsAccountNumber: TRzCheckBox
+        Left = 32
+        Top = 112
+        Width = 219
+        Height = 19
+        Caption = 'Voucher number as account number '
+        State = cbUnchecked
+        TabOrder = 3
       end
     end
     object TabSheet7: TRzTabSheet

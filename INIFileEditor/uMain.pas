@@ -150,6 +150,7 @@ type
     edNumberofUtemsToUpdateCostprice: TRzNumericEdit;
     edBusinessCentralKunde: TRzEdit;
     RzLabel43: TRzLabel;
+    cbVoucherNumberAsAccountNumber: TRzCheckBox;
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
@@ -238,6 +239,7 @@ begin
   edFinancialRecordsDAys.Text := FiniFile.ReadString('FinancialRecords', 'Days to look for records', '5');
   edFinancialRecordsLastRun.Text := FiniFile.ReadString('FinancialRecords', 'Last run', '');
   edFinancialRecordsLastTry.Text := FiniFile.ReadString('FinancialRecords', 'Last time sync to BC was tried', '');
+  cbVoucherNumberAsAccountNumber.Checked := FiniFile.ReadBool('FinancialRecords', 'Voucher number as account number', FALSE);
 
   edSalesTransactionsDays.Text := FiniFile.ReadString('SalesTransaction', 'Days to look for records', '5');
   edSalesTransactionsLastRun.Text := FiniFile.ReadString('SalesTransaction', 'Last run', '');
@@ -400,6 +402,7 @@ begin
   FiniFile.WriteString('FinancialRecords', 'Days to look for records', edFinancialRecordsDAys.Text);
   FiniFile.WriteString('FinancialRecords', 'Last run', edFinancialRecordsLastRun.Text);
   FiniFile.WriteString('FinancialRecords', 'Last time sync to BC was tried', edFinancialRecordsLastTry.Text);
+  FiniFile.WriteBool('FinancialRecords', 'Voucher number as account number', cbVoucherNumberAsAccountNumber.Checked);
 
   FiniFile.WriteString('SalesTransaction', 'Days to look for records', edSalesTransactionsDays.Text);
   FiniFile.WriteString('SalesTransaction', 'Last run', edSalesTransactionsLastRun.Text);

@@ -105,11 +105,11 @@ type
     LF_BC_PASSWORD: String;
     LF_BC_ACTIVECOMPANYID: String;
     LF_BC_Environment: string;
-    LF_BC_Customer: string; //Here we set the name of the customer. As of 11-02-2025 we have Kaufmann and nyform.
-//    LC_BC_CustomerNo: Integer; //Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
-//    LF_BC_Online: Boolean;
-//    /// 0: 0,1: Kaufmann.   2,3: nyform
-    LF_BC_Version: Integer; //Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
+    LF_BC_Customer: string; // Here we set the name of the customer. As of 11-02-2025 we have Kaufmann and nyform.
+    // LC_BC_CustomerNo: Integer; //Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
+    // LF_BC_Online: Boolean;
+    // /// 0: 0,1: Kaufmann.   2,3: nyform
+    LF_BC_Version: Integer; // Here we set the "number" of the corresponding customer. 0,1: Kaufmann. 2,3: ny-form
     /// This is what BC throws when we needs to take a break and not use API so much
     FLastDateTimeForStatusCode503: TDateTime;
     FLastStatusCode: Integer;
@@ -204,27 +204,27 @@ begin
 
   if FLastStatusCode = 503 then
   begin
-//    //503 is coming from Business central when it will not accept more incoming calls for a while
-//    if FLastDateTimeForStatusCode503<(NOW-EncodeTime(0,5,0,0)) then
-//    begin
-//      //Its benn more than 5 minutes sinse last 503 - Do send mail
-//      lDoSendMail := TRUE;
-//    end
-//    else
-//    begin
-      //We do not want any mail of 503.
-      //Just means we have to delay a little before continue
+    // //503 is coming from Business central when it will not accept more incoming calls for a while
+    // if FLastDateTimeForStatusCode503<(NOW-EncodeTime(0,5,0,0)) then
+    // begin
+    // //Its benn more than 5 minutes sinse last 503 - Do send mail
+    // lDoSendMail := TRUE;
+    // end
+    // else
+    // begin
+    // We do not want any mail of 503.
+    // Just means we have to delay a little before continue
 
-      //For now we alwas send a email
-      lDoSendMail := TRUE;
-//    end;
+    // For now we alwas send a email
+    lDoSendMail := TRUE;
+    // end;
   end
   else
   begin
     lDoSendMail := TRUE;
   end;
 
-  AddToLog(Format('  Last statuscode: %s. DoSendMail: %s',[FLastStatusCode.ToString, lDoSendMail.ToString(true)]));
+  AddToLog(Format('  Last statuscode: %s. DoSendMail: %s', [FLastStatusCode.ToString, lDoSendMail.ToString(TRUE)]));
   if lDoSendMail then
   begin
     lFromName := iniFile.ReadString('MAIL', 'From name', '');
@@ -273,9 +273,10 @@ begin
           MailContent := TStringList.Create;
           try
             AddToLog('    Set content of mail');
-            MailContent.Add(Format('Statuscode: %s',[FLastStatusCode.ToString]));
-            if FLastStatusCode=503 then
-              MailContent.Add('503 Service Unavailable - The server cannot handle the request (because it is overloaded or down for maintenance). Generally, this is a temporary state');
+            MailContent.Add(Format('Statuscode: %s', [FLastStatusCode.ToString]));
+            if FLastStatusCode = 503 then
+              MailContent.Add
+                ('503 Service Unavailable - The server cannot handle the request (because it is overloaded or down for maintenance). Generally, this is a temporary state');
             MailContent.Add(' ');
             MailContent.Add(aText);
             lSendEMailMailSetup.EmailContent := MailContent;
@@ -555,18 +556,18 @@ end;
 
 Function TDM.FetchNextTransID(aTransactionIDUSedFor: String): Integer;
 begin
-//{$IFDEF DEBUG}
-//  AddToLog(Format('  DEBUG Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
-//  Result := 1234567;
-//  AddToLog(Format('    Transaction ID: %d.', [Result]))
-//{$ENDIF}
-//{$IFDEF RELEASE}
-    AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
+  // {$IFDEF DEBUG}
+  // AddToLog(Format('  DEBUG Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
+  // Result := 1234567;
+  // AddToLog(Format('    Transaction ID: %d.', [Result]))
+  // {$ENDIF}
+  // {$IFDEF RELEASE}
+  AddToLog(Format('  Fetching next transaction ID for %s.', [aTransactionIDUSedFor]));
   GetNextTransactionIDToBC.ParamByName('Step').AsInteger := 1;
   GetNextTransactionIDToBC.ExecProc;
   Result := GetNextTransactionIDToBC.ParamByName('TransID').AsInteger;
   AddToLog(Format('    Transaction ID: %d.', [Result]))
-//{$ENDIF}
+  // {$ENDIF}
 end;
 
 function TDM.FetchBCSettings: Boolean;
@@ -584,11 +585,11 @@ begin
   LF_BC_PASSWORD := iniFile.ReadString('BUSINESS CENTRAL', 'BC_PASSWORD', '');
   LF_BC_ACTIVECOMPANYID := iniFile.ReadString('BUSINESS CENTRAL', 'BC_ACTIVECOMPANYID', '');
   LF_BC_Customer := iniFile.ReadString('BUSINESS CENTRAL', 'Online Business Central', '');
-  if LF_BC_Customer.ToUpper='KAUFMANN' then
+  if LF_BC_Customer.ToUpper = 'KAUFMANN' then
   begin
     LF_BC_Version := 0;
   end
-  else if LF_BC_Customer.ToUpper='NYFORM' then
+  else if LF_BC_Customer.ToUpper = 'NYFORM' then
   begin
     LF_BC_Version := 2;
   end
@@ -597,15 +598,15 @@ begin
     LF_BC_Version := -1;
   end;
 
-//  LF_BC_Online := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
-//  if LF_BC_Online then
-//  begin
-//    LF_BC_Version := 2;
-//  end
-//  else
-//  begin
-//    LF_BC_Version := 0;
-//  end;
+  // LF_BC_Online := iniFile.ReadBool('BUSINESS CENTRAL', 'Online Business Central', FALSE);
+  // if LF_BC_Online then
+  // begin
+  // LF_BC_Version := 2;
+  // end
+  // else
+  // begin
+  // LF_BC_Version := 0;
+  // end;
 
   if (LF_BC_BASEURL = '') AND
     (LF_BC_PORT_Int = 0) AND
@@ -647,7 +648,7 @@ begin
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
   AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
-//  AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
+  // AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
   AddToLog('  LF_BC_Customer: ' + LF_BC_Customer + '   LF_BC_Version: ' + LF_BC_Version.ToString);
   AddToLog(Format('Business Central version: %s (0: Current local based BC witrh basic authentication.   2: BC IN the sky with OAuth2 authentication) ', [LF_BC_Version.ToString]));
 
@@ -1271,12 +1272,13 @@ var
   BC_TransactionID: Integer;
   lDateAndTimeOfLastRun: TDateTime;
   RoutineCanceled: Boolean;
+  lVoucherAsAccountNumber: Boolean;
 
   function CreateAndExportFinancialRecord: Boolean;
   var
     lkmCashstatement: TkmCashstatement;
     lStr: string;
-    ExponGV: Boolean;
+//    ExponGV: Boolean;
     lFinansEKsportFileName: string;
     lExportFile: TextFile;
     Delimiter: string;
@@ -1489,54 +1491,34 @@ var
               begin
                 if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 120) then
                 begin
-                  // Modtaget et gavekort
-                  ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
-                    (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
-                  if (ExponGV) then
-                    lkmCashstatement.type_ := '0'
-                  else
-                    lkmCashstatement.type_ := '3';
+                  lkmCashstatement.type_ := '0';
 
-                  // Dette bliver det scannede gavekortsnummer
-                  lStr := Trim(QFetchFinancialRecords.FieldByName('Tekst').AsString);
-                  While (POS('GV ', lStr) > 0) do
-                    Delete(lStr, POS('GV ', lStr), 3);
+                  lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
 
-                  if (ExponGV) then
+                  if lVoucherAsAccountNumber then
                   begin
-                    lkmCashstatement.bilagsnummer := lStr;
-                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                    // Kaufmann - Unormal møde. Sætter kontonummer lige med gavekortsnumer
+                    // Dette bliver det scannede gavekortsnummer
+                    lStr := Trim(QFetchFinancialRecords.FieldByName('Tekst').AsString);
+                    While (POS('GV ', lStr) > 0) do
+                      Delete(lStr, POS('GV ', lStr), 3);
+                    lkmCashstatement.id := lStr;
                   end
                   else
                   begin
-                    lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
-                    lkmCashstatement.id := lStr;
+                    // ny-form - og normal måde - Kontonummer
+                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
                   end;
-
                   lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
                 end
                 else
                 begin
                   // Udstedt et gavekort
-                  ExponGV := (Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString)) OR
-                    (Trim('8370') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString));
-                  if (ExponGV) then
-                  begin
-                    // Gamle elektroniske (8370) eller nye (8372)
-                    lkmCashstatement.type_ := '0';
-                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-                    if ((Trim('8372') = Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString))) then
-                      lkmCashstatement.bilagsnummer := Trim(QFetchFinancialRecords.FieldByName('BilagsNr2').AsString)
-                    else
-                      lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-
-                  end
-                  else
-                  begin
-                    lkmCashstatement.type_ := '3';
-                    // Rettet efter Oles anvisning.
-                    lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
-                  end;
+                  lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
+                  lkmCashstatement.type_ := '3';
+                  // Rettet efter Oles anvisning.
+                  lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
+                  // end;
                 end;
 
               end;
@@ -1562,12 +1544,12 @@ var
 
           // Add to log
           AddToLog(Format('  Financial record to transfer: %d - %s', [lExportCounter, lJSONStr]));
-//{$IFDEF RELEASE}
+          // {$IFDEF RELEASE}
           DoContinue := (lBusinessCentral.PostkmCashstatement(lBusinessCentralSetup, lkmCashstatement, lResponse, TRUE, LF_BC_Version));
-//{$ELSE}
-//          DoContinue := TRUE;
-//          AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
-//{$ENDIF}
+          // {$ELSE}
+          // DoContinue := TRUE;
+          // AddToLog(Format('  Financial record not transferred (DEBUG mode)', []));
+          // {$ENDIF}
           if DoContinue then
           begin
             iniFile.WriteDateTime('FinancialRecords', 'Last run', QFetchFinancialRecords.FieldByName('Dato').AsDateTime);
@@ -1640,6 +1622,7 @@ begin
           if (NOT(tnMain.Active)) then
             tnMain.StartTransaction;
 
+          lVoucherAsAccountNumber := iniFile.ReadBool('FinancialRecords', 'Voucher number as account number', FALSE);
           lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
           // AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
           AddToLog(Format('Days to look for records which are not yet transferred:  %s', [lDaysToLookAfterRecords.ToString]));
