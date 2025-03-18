@@ -1278,7 +1278,7 @@ var
   var
     lkmCashstatement: TkmCashstatement;
     lStr: string;
-//    ExponGV: Boolean;
+    // ExponGV: Boolean;
     lFinansEKsportFileName: string;
     lExportFile: TextFile;
     Delimiter: string;
@@ -1515,7 +1515,14 @@ var
                 begin
                   // Udstedt et gavekort
                   lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-                  lkmCashstatement.type_ := '3';
+                  if lVoucherAsAccountNumber then
+                  begin
+                    lkmCashstatement.type_ := '3';
+                  end
+                  else
+                  begin
+                    lkmCashstatement.type_ := '0';
+                  end;
                   // Rettet efter Oles anvisning.
                   lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
                   // end;
@@ -1796,8 +1803,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        // lkmItem.WEBVare := QFetchItems.FieldByName('WEBVarer').AsInteger;
-        lkmItem.WEBVare := Bool(QFetchItems.FieldByName('WEBVarer').AsInteger);
+        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger<>0);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1879,7 +1885,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        lkmItem.WEBVare := Bool(QFetchItems.FieldByName('WEBVarer').AsInteger);
+        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger<>0);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -2157,8 +2163,6 @@ begin
             '    VARER.KATEGORI2 AS WEIGTH,' + #13#10 +
             '    /*IntraStat value*/' + #13#10 +
             '    VARER.INTRASTAT,' + #13#10 +
-            '    /*Marker to web item*/' + #13#10 +
-            '    VARER.WEBVARER,' + #13#10 +
             '    /*Cost price from selected department*/' + #13#10 +
             '    (SELECT' + #13#10 +
             '         VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK' + #13#10 +
@@ -2234,8 +2238,6 @@ begin
             '    VARER.KATEGORI2 AS WEIGTH,' + #13#10 +
             '    /*IntraStat value*/' + #13#10 +
             '    VARER.INTRASTAT,' + #13#10 +
-            '    /*Marker to web item*/' + #13#10 +
-            '    VARER.WEBVARER,' + #13#10 +
             '    /*Cost price from selected department*/' + #13#10 +
             '    (SELECT' + #13#10 +
             '         VAREFRVSTR_DETAIL.VEJETKOSTPRISSTK' + #13#10 +
