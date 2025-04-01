@@ -1272,7 +1272,6 @@ var
   BC_TransactionID: Integer;
   lDateAndTimeOfLastRun: TDateTime;
   RoutineCanceled: Boolean;
-  lVoucherAsAccountNumber: Boolean;
 
   function CreateAndExportFinancialRecord: Boolean;
   var
@@ -1495,34 +1494,14 @@ var
 
                   lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
 
-                  if lVoucherAsAccountNumber then
-                  begin
-                    // Kaufmann - Unormal møde. Sætter kontonummer lige med gavekortsnumer
-                    // Dette bliver det scannede gavekortsnummer
-                    lStr := Trim(QFetchFinancialRecords.FieldByName('Tekst').AsString);
-                    While (POS('GV ', lStr) > 0) do
-                      Delete(lStr, POS('GV ', lStr), 3);
-                    lkmCashstatement.id := lStr;
-                  end
-                  else
-                  begin
-                    // ny-form - og normal måde - Kontonummer
                     lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-                  end;
                   lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
                 end
                 else
                 begin
                   // Udstedt et gavekort
                   lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-                  if lVoucherAsAccountNumber then
-                  begin
-                    lkmCashstatement.type_ := '3';
-                  end
-                  else
-                  begin
-                    lkmCashstatement.type_ := '0';
-                  end;
+                   lkmCashstatement.type_ := '0';
                   // Rettet efter Oles anvisning.
                   lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
                   // end;
@@ -1629,7 +1608,7 @@ begin
           if (NOT(tnMain.Active)) then
             tnMain.StartTransaction;
 
-          lVoucherAsAccountNumber := iniFile.ReadBool('FinancialRecords', 'Voucher number as account number', FALSE);
+          iniFile.DeleteKey('FinancialRecords', 'Voucher number as account number');
           lDaysToLookAfterRecords := iniFile.ReadInteger('FinancialRecords', 'Days to look for records', 5);
           // AddToLog(Format('Days to look for records if no LAST RUN is set:  %s', [lDaysToLookAfterRecords.ToString]));
           AddToLog(Format('Days to look for records which are not yet transferred:  %s', [lDaysToLookAfterRecords.ToString]));
@@ -3334,6 +3313,7 @@ begin
         AddToLog(Format('Syncronize Stock regulations Transaction: DOES  NOT EXISTS', []));
         // DoSyncronizeStockRegulationTransaction;
       end;
+//      AddToLog('  DEBUG - WE DO NOTHING');
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
   except
@@ -3387,14 +3367,14 @@ var
   end;
 
   function ItIsTimeToRun: Boolean;
-{$IFNDEF DEBUG}
+//{$IFNDEF DEBUG}
   var
     lCurrentHour: string;
-{$ENDIF}
+//{$ENDIF}
   begin
-{$IFDEF DEBUG}
-    Result := TRUE;
-{$ELSE}
+//{$IFDEF DEBUG}
+//    Result := TRUE;
+//{$ELSE}
     if glRunEachMinute then
     begin
       Result := TRUE;
@@ -3422,7 +3402,7 @@ var
         Result := FALSE;
       end;
     end;
-{$ENDIF}
+//{$ENDIF}
   end;
 
 begin

@@ -25,9 +25,9 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = TabSheet1
+    ActivePage = TabSheet4
     Align = alClient
-    TabIndex = 1
+    TabIndex = 5
     TabOrder = 0
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -656,15 +656,6 @@ object frmMain: TfrmMain
         Enabled = False
         ReadOnly = True
         TabOrder = 2
-      end
-      object cbVoucherNumberAsAccountNumber: TRzCheckBox
-        Left = 32
-        Top = 112
-        Width = 219
-        Height = 19
-        Caption = 'Voucher number as account number '
-        State = cbUnchecked
-        TabOrder = 3
       end
     end
     object TabSheet7: TRzTabSheet
