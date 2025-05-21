@@ -51,10 +51,15 @@ object DM: TDM
       '    POSTERINGER.KONTOTYPE,'
       '    POSTERINGER.KONTONR,'
       '    POSTERINGER.BILAGSNR,'
-      '    CAST('#39#39' AS VARCHAR(30)) AS BilagsNr2,'
+      '    CAST('#39#39' AS VARCHAR(30)) AS BILAGSNR2,'
       '    POSTERINGER.AFDELING,'
       '    POSTERINGER.MODKONTO,'
-      '    POSTERINGER.TEKST,'
+      '    CASE WHEN POSTERINGER.VALUTA = 0 THEN'
+      '        POSTERINGER.TEKST'
+      
+        '      ELSE POSTERINGER.TEKST || '#39' ('#39' || ROUND((POSTERINGER.BELOB' +
+        ' / POSTERINGER.VALUTA) * 100, 2) || '#39')'#39
+      '    END AS TEKST,'
       '    POSTERINGER.BELOB,'
       '    POSTERINGER.MOMSKODE,'
       '    POSTERINGER.MODBILAG,'
@@ -64,13 +69,13 @@ object DM: TDM
       '    POSTERINGER.SORTERING'
       'FROM POSTERINGER'
       'WHERE'
-      '    POSTERINGER.belob <> 0 AND'
-      '    POSTERINGER.Dato >= :PStartDato AND'
-      '    POSTERINGER.Dato <= :PSlutDato AND'
-      '    POSTERINGER.Behandlet = 0 AND'
-      '    CHAR_LENGTH(POSTERINGER.AFDELING_ID) = 3'
+      '    POSTERINGER.BELOB <> 0'
+      '    AND POSTERINGER.DATO >= :PSTARTDATO'
+      '    AND POSTERINGER.DATO <= :PSLUTDATO'
+      '    AND POSTERINGER.BEHANDLET = 0'
+      '    AND CHAR_LENGTH(POSTERINGER.AFDELING_ID) = 3'
       'ORDER BY'
-      '    POSTERINGER.Dato ASC')
+      '    POSTERINGER.DATO ASC  ')
     Left = 72
     Top = 463
     ParamData = <
