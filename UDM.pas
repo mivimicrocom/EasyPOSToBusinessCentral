@@ -81,6 +81,8 @@ type
     qFetchVariant: TFDQuery;
     qDoRegulation: TFDQuery;
     INS_WEBLogEasyPOS: TFDQuery;
+    UpdItem: TFDQuery;
+    trUpdateItem: TFDTransaction;
     procedure tiTimerTimer(Sender: TObject);
   private
     { Private declarations }
@@ -1276,8 +1278,6 @@ var
   function CreateAndExportFinancialRecord: Boolean;
   var
     lkmCashstatement: TkmCashstatement;
-    lStr: string;
-    // ExponGV: Boolean;
     lFinansEKsportFileName: string;
     lExportFile: TextFile;
     Delimiter: string;
@@ -1494,14 +1494,14 @@ var
 
                   lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;;
 
-                    lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
+                  lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
                   lkmCashstatement.text := QFetchFinancialRecords.FieldByName('Tekst').AsString;
                 end
                 else
                 begin
                   // Udstedt et gavekort
                   lkmCashstatement.bilagsnummer := QFetchFinancialRecords.FieldByName('BilagsNr').AsString;
-                   lkmCashstatement.type_ := '0';
+                  lkmCashstatement.type_ := '0';
                   // Rettet efter Oles anvisning.
                   lkmCashstatement.id := QFetchFinancialRecords.FieldByName('KontoNr').AsString;
                   // end;
@@ -1782,7 +1782,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger<>0);
+        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger <> 0);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1864,7 +1864,7 @@ var
           lkmItem.netWeight := lFloat
         else
           lkmItem.netWeight := 1;
-        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger<>0);
+        lkmItem.WEBVare := (QFetchItems.FieldByName('WEBVarer').AsInteger <> 0);
 
         // Build JSON string
         lJSONStr := GetDefaultSerializer.SerializeObject(lkmItem);
@@ -1936,10 +1936,15 @@ var
         begin
 {$IFNDEF DEBUG}
           AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
-          QItemsTemp.SQL.Clear;
-          QItemsTemp.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
-          QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
-          QItemsTemp.ExecSQL;
+          //Use own transaction to isolate update to not lock EasyPOS
+          if (NOT (trUpdateItem.Active)) then
+            trUpdateItem.StartTransaction;
+          UpdItem.SQL.Clear;
+          UpdItem.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
+          UpdItem.ParamByName('PV').AsString := QFetchItems.FieldByName('VareID').AsString;
+          UpdItem.ExecSQL;
+          if (trUpdateItem.Active) then
+            trUpdateItem.Commit;
           AddToLog(Format('    Handling variants to head item %s', [QFetchItems.FieldByName('VareID').AsString]));
 {$ENDIF}
         end;
@@ -2025,10 +2030,14 @@ var
         begin
 {$IFNDEF DEBUG}
           AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
-          QItemsTemp.SQL.Clear;
-          QItemsTemp.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
-          QItemsTemp.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
-          QItemsTemp.ExecSQL;
+          if (NOT (trUpdateItem.Active)) then
+            trUpdateItem.StartTransaction;
+          UpdItem.SQL.Clear;
+          UpdItem.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
+          UpdItem.ParamByName('PV').AsString := QFetchItems.FieldByName('VariantID').AsString;
+          UpdItem.ExecSQL;
+          if (trUpdateItem.Active) then
+            trUpdateItem.Commit;
 {$ENDIF}
         end;
       end;
@@ -3313,7 +3322,7 @@ begin
         AddToLog(Format('Syncronize Stock regulations Transaction: DOES  NOT EXISTS', []));
         // DoSyncronizeStockRegulationTransaction;
       end;
-//      AddToLog('  DEBUG - WE DO NOTHING');
+      // AddToLog('  DEBUG - WE DO NOTHING');
       iniFile.WriteDateTime('PROGRAM', 'LAST RUN', NOW);
     end;
   except
@@ -3367,14 +3376,14 @@ var
   end;
 
   function ItIsTimeToRun: Boolean;
-//{$IFNDEF DEBUG}
+  // {$IFNDEF DEBUG}
   var
     lCurrentHour: string;
-//{$ENDIF}
+    // {$ENDIF}
   begin
-//{$IFDEF DEBUG}
-//    Result := TRUE;
-//{$ELSE}
+    // {$IFDEF DEBUG}
+    // Result := TRUE;
+    // {$ELSE}
     if glRunEachMinute then
     begin
       Result := TRUE;
@@ -3402,7 +3411,7 @@ var
         Result := FALSE;
       end;
     end;
-//{$ENDIF}
+    // {$ENDIF}
   end;
 
 begin

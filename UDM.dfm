@@ -887,4 +887,21 @@ object DM: TDM
         ParamType = ptInput
       end>
   end
+  object UpdItem: TFDQuery
+    ObjectView = False
+    Connection = dbMain
+    Transaction = trUpdateItem
+    FetchOptions.AssignedValues = [evAutoFetchAll]
+    FetchOptions.AutoFetchAll = afDisable
+    Left = 344
+    Top = 487
+  end
+  object trUpdateItem: TFDTransaction
+    Options.Isolation = xiReadCommitted
+    Options.AutoStart = False
+    Options.AutoStop = False
+    Connection = dbMain
+    Left = 336
+    Top = 426
+  end
 end
