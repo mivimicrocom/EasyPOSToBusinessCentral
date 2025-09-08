@@ -25,9 +25,9 @@ object frmMain: TfrmMain
     Width = 1371
     Height = 715
     Hint = ''
-    ActivePage = TabSheet4
+    ActivePage = tsProgram
     Align = alClient
-    TabIndex = 5
+    TabIndex = 0
     TabOrder = 0
     FixedDimension = 21
     object tsProgram: TRzTabSheet
@@ -35,9 +35,12 @@ object frmMain: TfrmMain
       object Label1: TRzLabel
         Left = 16
         Top = 28
-        Width = 237
+        Width = 751
         Height = 15
-        Caption = 'At which hour should the routine run (i.e. 22)'
+        Caption = 
+          'At which hour should the routine run (can be an hour like 22, or' +
+          ' between 2 hours (both included like 2204) or how many minutes b' +
+          'etween runs'
       end
       object Label2: TRzLabel
         Left = 16
@@ -154,6 +157,7 @@ object frmMain: TfrmMain
         Top = 568
         Width = 357
         Height = 19
+        AutoSizeWidth = 357
         Caption = 
           'Only run as test (noting will be syncronized to Business Central' +
           ')'
@@ -472,6 +476,7 @@ object frmMain: TfrmMain
         Top = 475
         Width = 60
         Height = 17
+        AutoSizeWidth = 60
         Caption = 'Use TLS'
         State = cbUnchecked
         TabOrder = 10
@@ -484,6 +489,7 @@ object frmMain: TfrmMain
         Top = 32
         Width = 108
         Height = 17
+        AutoSizeWidth = 108
         Caption = 'Syncronize items'
         State = cbUnchecked
         TabOrder = 0
@@ -493,6 +499,7 @@ object frmMain: TfrmMain
         Top = 75
         Width = 166
         Height = 17
+        AutoSizeWidth = 166
         Caption = 'Syncronize financial records'
         State = cbUnchecked
         TabOrder = 1
@@ -502,6 +509,7 @@ object frmMain: TfrmMain
         Top = 119
         Width = 171
         Height = 17
+        AutoSizeWidth = 171
         Caption = 'Syncronize sales transactions'
         State = cbUnchecked
         TabOrder = 2
@@ -511,6 +519,7 @@ object frmMain: TfrmMain
         Top = 162
         Width = 204
         Height = 17
+        AutoSizeWidth = 204
         Caption = 'Syncronize movement transactions'
         State = cbUnchecked
         TabOrder = 3
@@ -520,6 +529,7 @@ object frmMain: TfrmMain
         Top = 206
         Width = 231
         Height = 17
+        AutoSizeWidth = 231
         Caption = 'Syncronize stock regulation transactions'
         State = cbUnchecked
         TabOrder = 4
@@ -529,6 +539,7 @@ object frmMain: TfrmMain
         Top = 250
         Width = 312
         Height = 17
+        AutoSizeWidth = 312
         Caption = 'Syncronize costprices from Business Central to EasyPOS'
         State = cbUnchecked
         TabOrder = 5

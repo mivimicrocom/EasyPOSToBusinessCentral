@@ -1936,8 +1936,8 @@ var
         begin
 {$IFNDEF DEBUG}
           AddToLog(Format('    Head item %s marked as exported', [QFetchItems.FieldByName('VareID').AsString]));
-          //Use own transaction to isolate update to not lock EasyPOS
-          if (NOT (trUpdateItem.Active)) then
+          // Use own transaction to isolate update to not lock EasyPOS
+          if (NOT(trUpdateItem.Active)) then
             trUpdateItem.StartTransaction;
           UpdItem.SQL.Clear;
           UpdItem.SQL.Add('Update Varer set Eksporteret=Eksporteret+1 where Plu_Nr=:PV;');
@@ -2030,7 +2030,7 @@ var
         begin
 {$IFNDEF DEBUG}
           AddToLog(Format('      Variant %s marked as exported', [QFetchItems.FieldByName('VariantID').AsString]));
-          if (NOT (trUpdateItem.Active)) then
+          if (NOT(trUpdateItem.Active)) then
             trUpdateItem.StartTransaction;
           UpdItem.SQL.Clear;
           UpdItem.SQL.Add('Update VareFrvStr set Eksporteret=Eksporteret+1 where V509Index=:PV;');
@@ -3346,6 +3346,7 @@ var
   PrgVers1, PrgVers2, PrgVers3, PrgVers4: Word;
 
   glRunTime: string;
+  glRunTimeTo: String;
   glRunEachMinute: Boolean;
   glLastRunTime: TDateTime;
 
@@ -3390,11 +3391,12 @@ var
     end
     else
     begin
-      if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
+      if glRunTimeTo <> '' then
       begin
+        // We have to run between 2 hours
         // It is not today. Check time
         lCurrentHour := FormatDateTime('hh', NOW);
-        if lCurrentHour = glRunTime then
+        if ((lCurrentHour.ToInteger >= glRunTime.ToInteger) OR (lCurrentHour.ToInteger <= glRunTimeTo.ToInteger)) then
         begin
           // It is time to run
           Result := TRUE;
@@ -3407,8 +3409,26 @@ var
       end
       else
       begin
-        // Last run was today. You cannot run more today
-        Result := FALSE;
+        if FormatDateTime('yyyymmdd', NOW) <> FormatDateTime('yyyymmdd', glLastRunTime) then
+        begin
+          // It is not today. Check time
+          lCurrentHour := FormatDateTime('hh', NOW);
+          if lCurrentHour = glRunTime then
+          begin
+            // It is time to run
+            Result := TRUE;
+          end
+          else
+          begin
+            // Not the right time to run
+            Result := FALSE;
+          end;
+        end
+        else
+        begin
+          // Last run was today. You cannot run more today
+          Result := FALSE;
+        end;
       end;
     end;
     // {$ENDIF}
@@ -3419,6 +3439,17 @@ begin
 
   // glTimer := iniFile.ReadInteger('PROGRAM', 'TIMER', 300);
   glRunTime := iniFile.ReadString('PROGRAM', 'RUNTIME', '22');
+  if glRunTime.ToInteger > 180 then
+  begin
+    // A valule bigger than 180 is has been set. This means it should be 4 digits long. Then we have 2 hours where it should run
+    glRunTimeTo := Copy(glRunTime, 3, 2);
+    glRunTime := Copy(glRunTime, 1, 2);
+  end
+  else
+  begin
+    glRunTimeTo := '';
+  end;
+
   glRunEachMinute := iniFile.ReadBool('PROGRAM', 'RUN AT EACH MINUTE', FALSE);
   glLastRunTime := iniFile.ReadDateTime('PROGRAM', 'LAST RUN', NOW - 365);
   if glRunEachMinute then
@@ -3447,8 +3478,16 @@ begin
     end
     else
     begin
-      AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
-      AddToLog(Format('  Should run at %s', [glRunTime]));
+      if glRunTimeTo <> '' then
+      begin
+        AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
+        AddToLog(Format('  Should run between %s and %s', [glRunTime, glRunTimeTo]));
+      end
+      else
+      begin
+        AddToLog(Format('  Time is %s', [FormatDateTime('dd-mm-yyyy hh:mm', glLastRunTime)]));
+        AddToLog(Format('  Should run at %s', [glRunTime]));
+      end;
     end;
     AddToLog(' ');
 
