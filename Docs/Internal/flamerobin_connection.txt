@@ -1,0 +1,29 @@
+Database: 10.8.20.11/3070:f:\Data\FB30\Kaufmann\OCCEASYPOS.FDB
+User: SYSDBA
+Password: masterkey
+Charset: UTF8
+
+Query to run:
+--------------
+/* Query to find all triggers on VARER table that might update bc_updatedate */
+SET HEADING ON;
+SET LIST ON;
+
+SELECT 
+    TRIM(RDB$TRIGGER_NAME) as TRIGGER_NAME,
+    RDB$TRIGGER_TYPE as TRIGGER_TYPE,
+    RDB$TRIGGER_SOURCE as SOURCE
+FROM RDB$TRIGGERS
+WHERE 
+    RDB$RELATION_NAME = 'VARER'
+    AND RDB$SYSTEM_FLAG = 0
+ORDER BY RDB$TRIGGER_NAME;
+
+/* Also check field definition */
+SELECT 
+    TRIM(RDB$FIELD_NAME) as FIELD_NAME,
+    TRIM(RDB$DEFAULT_SOURCE) as DEFAULT_VALUE
+FROM RDB$RELATION_FIELDS
+WHERE 
+    RDB$RELATION_NAME = 'VARER'
+    AND UPPER(TRIM(RDB$FIELD_NAME)) = 'BC_UPDATEDATE';

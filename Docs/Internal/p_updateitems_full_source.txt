@@ -1,0 +1,1238 @@
+
+PROCEDURE_NAME                  P_UPDATEITEMS
+SOURCE                          1a:1ce38
+DECLARE VARIABLE L_START_TIME DATE;
+
+DECLARE VARIABLE L_UPDATE_TIME DATE;
+
+DECLARE VARIABLE LPROCESSLOG BLOB SUB_TYPE 0 SEGMENT SIZE 80;
+
+DECLARE VARIABLE LPROCESS TYPE OF COLUMN CREATEUPDATE_ITEM.PROCESS;
+
+DECLARE VARIABLE LID TYPE OF COLUMN CREATEUPDATE_ITEMS.ID;
+
+DECLARE VARIABLE LARTICLENUMBER TYPE OF COLUMN CREATEUPDATE_ITEMS.ARTICLENUMBER;
+
+DECLARE VARIABLE LBRAND TYPE OF COLUMN CREATEUPDATE_ITEMS.BRAND;
+
+DECLARE VARIABLE LBRANDID TYPE OF COLUMN CREATEUPDATE_ITEMS.BRANDID;
+
+DECLARE VARIABLE LITEMGROUP TYPE OF COLUMN CREATEUPDATE_ITEMS.ITEMGROUP;
+
+DECLARE VARIABLE LITEMGROUPID TYPE OF COLUMN CREATEUPDATE_ITEMS.ITEMGROUPID;
+
+DECLARE VARIABLE LSTYLE TYPE OF COLUMN CREATEUPDATE_ITEMS.STYLE;
+
+DECLARE VARIABLE LBARCODE TYPE OF COLUMN CREATEUPDATE_ITEMS.BARCODE;
+
+DECLARE VARIABLE LEANNUMBER TYPE OF COLUMN CREATEUPDATE_ITEMS.EANNUMBER;
+
+DECLARE VARIABLE LSUPPLIERSARTICLENUMBER TYPE OF COLUMN CREATEUPDATE_ITEMS.SUPPLIERSARTICLENUMBER;
+
+DECLARE VARIABLE LCOLOR TYPE OF COLUMN CREATEUPDATE_ITEMS.COLOR;
+
+DECLARE VARIABLE LSIZE_ TYPE OF COLUMN CREATEUPDATE_ITEMS.SIZE_;
+
+DECLARE VARIABLE LLENGTH_ TYPE OF COLUMN CREATEUPDATE_ITEMS.LENGTH_;
+
+DECLARE VARIABLE LDESCRIPTION TYPE OF COLUMN CREATEUPDATE_ITEMS.DESCRIPTION;
+
+DECLARE VARIABLE LDESCRIPTION2 TYPE OF COLUMN CREATEUPDATE_ITEMS.DESCRIPTION2;
+
+DECLARE VARIABLE LDESCRIPTION3 TYPE OF COLUMN CREATEUPDATE_ITEMS.DESCRIPTION3;
+
+DECLARE VARIABLE LLONGDESCRIPTION TYPE OF COLUMN CREATEUPDATE_ITEMS.LONGDESCRIPTION;
+
+DECLARE VARIABLE LSEASON TYPE OF COLUMN CREATEUPDATE_ITEMS.SEASON;
+
+DECLARE VARIABLE LGENDER TYPE OF COLUMN CREATEUPDATE_ITEMS.GENDER;
+
+DECLARE VARIABLE LWEIGHT TYPE OF COLUMN CREATEUPDATE_ITEMS.WEIGHT;
+
+DECLARE VARIABLE LCOUNTRYOFORIGION TYPE OF COLUMN CREATEUPDATE_ITEMS.COUNTRYOFORIGION;
+
+DECLARE VARIABLE LQUALITY TYPE OF COLUMN CREATEUPDATE_ITEMS.QUALITY;
+
+DECLARE VARIABLE LTARRIF_INTRASTAT TYPE OF COLUMN CREATEUPDATE_ITEMS.TARRIF_INTRASTAT;
+
+DECLARE VARIABLE LLABELQUANTITY TYPE OF COLUMN CREATEUPDATE_ITEMS.LABELQUANTITY;
+
+DECLARE VARIABLE LCATEGORY1 TYPE OF COLUMN CREATEUPDATE_ITEMS.CATEGORY1;
+
+DECLARE VARIABLE LCATEGORY2 TYPE OF COLUMN CREATEUPDATE_ITEMS.CATEGORY2;
+
+DECLARE VARIABLE LCATEGORY3 TYPE OF COLUMN CREATEUPDATE_ITEMS.CATEGORY3;
+
+DECLARE VARIABLE LCATEGORY4 TYPE OF COLUMN CREATEUPDATE_ITEMS.CATEGORY4;
+
+DECLARE VARIABLE LCATEGORY5 TYPE OF COLUMN CREATEUPDATE_ITEMS.CATEGORY5;
+
+DECLARE VARIABLE LSALESPRICEITEM TYPE OF COLUMN CREATEUPDATE_ITEMS.SALESPRICEITEM;
+
+DECLARE VARIABLE LSERVICE TYPE OF COLUMN CREATEUPDATE_ITEMS.SERVICE;
+
+DECLARE VARIABLE LWEBITEM TYPE OF COLUMN CREATEUPDATE_ITEMS.WEBITEM;
+
+DECLARE VARIABLE LBLOCKEDFORSALE TYPE OF COLUMN CREATEUPDATE_ITEMS.BLOCKEDFORSALE;
+
+DECLARE VARIABLE LBLOACKEDFORREGULATION TYPE OF COLUMN CREATEUPDATE_ITEMS.BLOACKEDFORREGULATION;
+
+DECLARE VARIABLE LCOUNTITEMS INTEGER;
+
+DECLARE VARIABLE LSQLSTRING BLOB SUB_TYPE 0 SEGMENT SIZE 80;
+
+DECLARE VARIABLE LSPERRET INTEGER;
+
+DECLARE VARIABLE LACTION_ TYPE OF COLUMN CREATEUPDATE_ITEMS.ACTION_;
+
+DECLARE VARIABLE ITEMPLU_NR TYPE OF COLUMN VARER.PLU_NR;
+
+DECLARE VARIABLE ITEMMODEL TYPE OF COLUMN VARER.MODEL;
+
+DECLARE VARIABLE ITEMLEVERID TYPE OF COLUMN VARER.LEVERID;
+
+DECLARE VARIABLE ITEMVAREGRPID TYPE OF COLUMN VARER.VAREGRPID;
+
+DECLARE VARIABLE ITEMV509INDEX TYPE OF COLUMN VAREFRVSTR.V509INDEX;
+
+DECLARE VARIABLE ITEMEANNUMMER TYPE OF COLUMN VAREFRVSTR.EANNUMMER;
+
+DECLARE VARIABLE LVARIANTUPDATE INTEGER;
+
+DECLARE VARIABLE LHEADITEMUPDATE INTEGER;
+
+DECLARE VARIABLE LHANDLED INTEGER;
+
+DECLARE VARIABLE LINT INTEGER;
+
+DECLARE VARIABLE LMESSAGE BLOB SUB_TYPE 0 SEGMENT SIZE 80;
+
+BEGIN
+
+  /* ************************
+
+    Created: 26-02-2025
+
+    Author: MIvi
+
+    Purpose:
+
+    This procedure will handle records (items) we need to Update
+
+    At this point we know its about UPDATE and that record exists with the UUID in CREATEUPDATE_ITEM.
+
+    All individuel items are present in CREATEUPDATE_ITEMS.
+
+
+
+    We need to:
+
+     - Select records.
+
+     - For each record update CREATEUPDATE_ITEM with information about state
+
+     - Validate record.
+
+     - Update item. This means:
+
+       - Check if item is there in head item (VARER). If it does not exists. Skip it.
+
+       - Check if item is there in variants (VAREFRVSTR). If it does not exists. Skip it.
+
+       - If the head item exists:
+
+         - Check for fields we need to update and update
+
+       - If the variant exists:
+
+         - Check for fields we need to update and update
+
+  ************************ */
+
+
+
+  /*Initiate variables*/
+
+  :LVARIANTUPDATE = 0;
+
+  :LHEADITEMUPDATE = 0;
+
+  :LPROCESS = 0;
+
+  LINT = 0;
+
+  LMESSAGE = '';
+
+
+
+  /*Initiate log*/
+
+  :LPROCESSLOG = 'Update procedure started' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+  :LPROCESSLOG = :LPROCESSLOG || '  UUID: ' || COALESCE(:I_UUID, '') || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+  :LPROCESSLOG = :LPROCESSLOG || '  Type: Update' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+
+
+  /*Set master for external access to starter */
+
+  SELECT
+
+      O_START_TIME
+
+  FROM P_CREATEUPDATE_ITEMS_START(:I_UUID, :LPROCESSLOG)
+
+  INTO :L_START_TIME;
+
+
+
+  /*Iterate through items*/
+
+  FOR SELECT
+
+          CREATEUPDATE_ITEMS.ID,
+
+          CREATEUPDATE_ITEMS.ARTICLENUMBER,
+
+          CREATEUPDATE_ITEMS.BRAND,
+
+          CREATEUPDATE_ITEMS.BRANDID,
+
+          CREATEUPDATE_ITEMS.ITEMGROUP,
+
+          CREATEUPDATE_ITEMS.ITEMGROUPID,
+
+          CREATEUPDATE_ITEMS.STYLE,
+
+          CREATEUPDATE_ITEMS.BARCODE,
+
+          CREATEUPDATE_ITEMS.EANNUMBER,
+
+          CREATEUPDATE_ITEMS.SUPPLIERSARTICLENUMBER,
+
+          CREATEUPDATE_ITEMS.COLOR,
+
+          CREATEUPDATE_ITEMS.SIZE_,
+
+          CREATEUPDATE_ITEMS.LENGTH_,
+
+          CREATEUPDATE_ITEMS.DESCRIPTION,
+
+          CREATEUPDATE_ITEMS.DESCRIPTION2,
+
+          CREATEUPDATE_ITEMS.DESCRIPTION3,
+
+          CREATEUPDATE_ITEMS.LONGDESCRIPTION,
+
+          CREATEUPDATE_ITEMS.SEASON,
+
+          CREATEUPDATE_ITEMS.GENDER,
+
+          CREATEUPDATE_ITEMS.WEIGHT,
+
+          CREATEUPDATE_ITEMS.COUNTRYOFORIGION,
+
+          CREATEUPDATE_ITEMS.QUALITY,
+
+          CREATEUPDATE_ITEMS.TARRIF_INTRASTAT,
+
+          CREATEUPDATE_ITEMS.LABELQUANTITY,
+
+          CREATEUPDATE_ITEMS.CATEGORY1,
+
+          CREATEUPDATE_ITEMS.CATEGORY2,
+
+          CREATEUPDATE_ITEMS.CATEGORY3,
+
+          CREATEUPDATE_ITEMS.CATEGORY4,
+
+          CREATEUPDATE_ITEMS.CATEGORY5,
+
+          CREATEUPDATE_ITEMS.SALESPRICEITEM,
+
+          CREATEUPDATE_ITEMS.SERVICE,
+
+          CREATEUPDATE_ITEMS.WEBITEM,
+
+          CREATEUPDATE_ITEMS.BLOCKEDFORSALE,
+
+          CREATEUPDATE_ITEMS.BLOACKEDFORREGULATION
+
+      FROM CREATEUPDATE_ITEMS
+
+      WHERE
+
+          CREATEUPDATE_ITEMS.MASTER_ID = :I_MASTER_ID
+
+      ORDER BY
+
+          CREATEUPDATE_ITEMS.ID ASC
+
+      INTO :LID,
+
+           :LARTICLENUMBER,
+
+           :LBRAND,
+
+           :LBRANDID,
+
+           :LITEMGROUP,
+
+           :LITEMGROUPID,
+
+           :LSTYLE,
+
+           :LBARCODE,
+
+           :LEANNUMBER,
+
+           :LSUPPLIERSARTICLENUMBER,
+
+           :LCOLOR,
+
+           :LSIZE_,
+
+           :LLENGTH_,
+
+           :LDESCRIPTION,
+
+           :LDESCRIPTION2,
+
+           :LDESCRIPTION3,
+
+           :LLONGDESCRIPTION,
+
+           :LSEASON,
+
+           :LGENDER,
+
+           :LWEIGHT,
+
+           :LCOUNTRYOFORIGION,
+
+           :LQUALITY,
+
+           :LTARRIF_INTRASTAT,
+
+           :LLABELQUANTITY,
+
+           :LCATEGORY1,
+
+           :LCATEGORY2,
+
+           :LCATEGORY3,
+
+           :LCATEGORY4,
+
+           :LCATEGORY5,
+
+           :LSALESPRICEITEM,
+
+           :LSERVICE,
+
+           :LWEBITEM,
+
+           :LBLOCKEDFORSALE,
+
+           :LBLOACKEDFORREGULATION
+
+  DO
+
+  BEGIN
+
+    /*Increment process*/
+
+    :LPROCESS = :LPROCESS + 1;
+
+    /*Log action*/
+
+    :LPROCESSLOG = :LPROCESSLOG || 'Handling record ' || COALESCE(:LPROCESS, '') || ' ID: ' || COALESCE(:LID, '') || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+    /*Set process*/
+
+    SELECT
+
+        O_END_TIME
+
+    FROM P_CREATEUPDATE_ITEMS_UPDATE(:I_UUID, 1, :LPROCESS, :LPROCESSLOG)
+
+    INTO :L_UPDATE_TIME;
+
+
+
+    /*
+
+    we need to validate the record.
+
+    We can update 3 things here. Head item (for all variants all departments) and/or variant (for all departments) and/or specific department variant.
+
+    To update head item, we need this to locate it:
+
+     - Article number (will correspond to PLU_NR in VARER)
+
+     - Brand + Itemgroup + Style (Will correspond to LEVERID + VAREGRPID + MODEL in VARER
+
+     - Barcode (from which we can find a variant, and then head ite,
+
+     - EAN Number (from which we can find a variant, and then head ite,
+
+    */
+
+
+
+
+
+    IF (NOT(COALESCE(:LBRANDID, '') = '')) THEN
+
+    BEGIN
+
+      /*User has entered an ID to the brand. Lets check this and return the brand name*/
+
+      /*Using a Brand ID takes precendence over Brand name*/
+
+      IF (EXISTS(SELECT
+
+                     NAVN
+
+                 FROM LEVERANDOERER
+
+                 WHERE
+
+                     UPPER(LEVERANDOERER.V509INDEX) = UPPER(:LBRANDID))) THEN
+
+      BEGIN
+
+        /*The ID we came in with exists. So lets fetch the brand.*/
+
+        SELECT
+
+            NAVN
+
+        FROM LEVERANDOERER
+
+        WHERE
+
+            UPPER(LEVERANDOERER.V509INDEX) = UPPER(:LBRANDID)
+
+        INTO :LBRAND;
+
+      END
+
+      ELSE
+
+      BEGIN
+
+        /*The brand ID does not exist. There we just use the brand name that came in, and later we will create it*/
+
+      END
+
+    END
+
+
+
+    IF (NOT(COALESCE(:LITEMGROUPID, '') = '')) THEN
+
+    BEGIN
+
+      /*User has entered an ID to the itemgroup. Lets check this and return the itemgroup name*/
+
+      IF (EXISTS(SELECT
+
+                     NAVN
+
+                 FROM VAREGRUPPER
+
+                 WHERE
+
+                     UPPER(VAREGRUPPER.V509INDEX) = UPPER(:LITEMGROUPID))) THEN
+
+      BEGIN
+
+        /*The ID we came in with exists. So lets fetch the itemgroup.*/
+
+        SELECT
+
+            NAVN
+
+        FROM VAREGRUPPER
+
+        WHERE
+
+            UPPER(VAREGRUPPER.V509INDEX) = UPPER(:LITEMGROUPID)
+
+        INTO :LITEMGROUP;
+
+      END
+
+      ELSE
+
+      BEGIN
+
+        /*The itemgroup ID does not exist. There we just use the brand name that came in, and later we will create it*/
+
+      END
+
+    END
+
+
+
+
+
+    /*Initiate info on record*/
+
+    :LACTION_ = '';
+
+    :LVARIANTUPDATE = 0;
+
+    :LHEADITEMUPDATE = 0;
+
+    /*Lets count variants / Head items we can locate. At least 1 to do update*/
+
+    SELECT
+
+        COUNT(*) AS ANTAL
+
+    FROM VARER
+
+        LEFT JOIN VAREFRVSTR ON
+
+              VAREFRVSTR.VAREPLU_ID = VARER.PLU_NR
+
+    WHERE
+
+        VARER.PLU_NR = :LARTICLENUMBER OR (UPPER(VARER.MODEL) = UPPER(COALESCE(:LSTYLE, ''))
+
+        AND UPPER(VARER.LEVERID) = UPPER(COALESCE(:LBRAND, ''))
+
+        AND UPPER(VARER.VAREGRPID) = UPPER(COALESCE(:LITEMGROUP, ''))) OR VAREFRVSTR.V509INDEX = :LBARCODE OR VAREFRVSTR.EANNUMMER = :LEANNUMBER
+
+    INTO :LCOUNTITEMS;
+
+
+
+    IF (:LCOUNTITEMS = 0) THEN
+
+    BEGIN
+
+      /*We found no records. Item does not exists. Can not do an update.*/
+
+      :LACTION_ = 'Skipped variant. ' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+      :LPROCESSLOG = :LPROCESSLOG || '  Skipped (does not exists)' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+    END
+
+    ELSE
+
+    BEGIN
+
+      /*At least 1 record was returned earlier.*/
+
+      /* Lets see blocked value
+
+            0: Item is not blocked
+
+            1: Item is block for sale
+
+            2: Item is blocked for stock regulation
+
+            3: Item is blocked for both sale and stock regulation
+
+            */
+
+      IF ((:LBLOACKEDFORREGULATION > 0) AND
+
+          (:LBLOCKEDFORSALE > 0)) THEN
+
+      BEGIN
+
+        :LSPERRET = 3;
+
+      END
+
+      ELSE
+
+      IF (:LBLOACKEDFORREGULATION > 0) THEN
+
+      BEGIN
+
+        :LSPERRET = 2;
+
+      END
+
+      ELSE
+
+      IF (:LBLOCKEDFORSALE > 0) THEN
+
+      BEGIN
+
+        :LSPERRET = 1;
+
+      END
+
+      ELSE
+
+      BEGIN
+
+        :LSPERRET = 0;
+
+      END
+
+
+
+      /*We have not yet found a varaint to update */
+
+      :LVARIANTUPDATE = 0;
+
+      /* ******************************** */
+
+      /* ******* VARIANT UPDATE  ******** */
+
+      /* ******************************** */
+
+      IF (((:LBARCODE <> '') AND
+
+          (NOT(:LBARCODE IS NULL))) OR
+
+          ((:LEANNUMBER <> '') AND
+
+          (NOT(:LEANNUMBER IS NULL)))) THEN
+
+      BEGIN
+
+        /*Barcode or eannumber is set - lets see if we can find a variant to update
+
+          Fields to update here are:
+
+
+
+             :LEANNUMBER,
+
+             :LSUPPLIERSARTICLENUMBER,
+
+             :LCOLOR,
+
+             :LSIZE_,
+
+             :LLENGTH_,
+
+             :LSALESPRICEITEM,
+
+             :LBLOCKEDFORSALE,
+
+             :LBLOACKEDFORREGULATION
+
+        */
+
+
+
+        /*Lets count how many variants we can locate*/
+
+        SELECT
+
+            COUNT(*)
+
+        FROM VAREFRVSTR
+
+        WHERE
+
+            VAREFRVSTR.V509INDEX = :LBARCODE OR VAREFRVSTR.EANNUMMER = :LEANNUMBER
+
+        INTO :LCOUNTITEMS;
+
+
+
+        IF (:LCOUNTITEMS = 0) THEN
+
+        BEGIN
+
+          /*We found no variant - inform and skip*/
+
+          :LACTION_ = 'Skipped variant.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  Skipped (variant does not exists)' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+        ELSE
+
+        BEGIN
+
+          IF (:LCOUNTITEMS > 1) THEN
+
+          BEGIN
+
+            /*We found more than 1 variant - inform and skip*/
+
+            :LACTION_ = 'Skipped variant.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+            :LPROCESSLOG = :LPROCESSLOG || '  Skipped (found ' || COALESCE(:LCOUNTITEMS, '') || ' records (Variant))' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          END
+
+          ELSE
+
+          BEGIN
+
+            /*Exactly 1 variant located. Update fields we can update*/
+
+            /*Fetch barcode - This is what we will use to update variants*/
+
+            SELECT
+
+                VAREFRVSTR.V509INDEX
+
+            FROM VAREFRVSTR
+
+            WHERE
+
+                VAREFRVSTR.V509INDEX = :LBARCODE OR VAREFRVSTR.EANNUMMER = :LEANNUMBER
+
+            INTO :ITEMV509INDEX;
+
+
+
+            :LACTION_ = 'Variant located. ' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+            :LPROCESSLOG = :LPROCESSLOG || '  1 variant located ' || COALESCE(:ITEMV509INDEX, '') || '. Updating this record ' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+
+
+            /*Lets update fields we can on item*/
+
+            :LSQLSTRING = 'UPDATE VAREFRVSTR SET ';
+
+            :LSQLSTRING = :LSQLSTRING || '  VAREFRVSTR.INTERSOLVE_METODE = VAREFRVSTR.INTERSOLVE_METODE ';
+
+            IF ((NOT(:LEANNUMBER IS NULL)) AND
+
+                (:LEANNUMBER <> '')) THEN
+
+              :LSQLSTRING = :LSQLSTRING || '  ,VAREFRVSTR.EANNUMMER = ''' || :LEANNUMBER || ''' ';
+
+            IF (NOT(:LSUPPLIERSARTICLENUMBER IS NULL)) THEN
+
+              :LSQLSTRING = :LSQLSTRING || '  ,VAREFRVSTR.LEVVARENR = ''' || :LSUPPLIERSARTICLENUMBER || ''' ';
+
+            IF (NOT(:LSALESPRICEITEM IS NULL)) THEN
+
+              :LSQLSTRING = :LSQLSTRING || '  ,VAREFRVSTR.SALGSPRISVARE = ' || :LSALESPRICEITEM;
+
+            IF ((NOT(:LBLOCKEDFORSALE IS NULL)) OR
+
+                (NOT(:LBLOCKEDFORSALE IS NULL))) THEN
+
+              :LSQLSTRING = :LSQLSTRING || '  ,VAREFRVSTR.SPERRET = ' || :LSPERRET || ' ';
+
+            :LSQLSTRING = :LSQLSTRING || 'WHERE ';
+
+            :LSQLSTRING = :LSQLSTRING || '  VAREFRVSTR.V509INDEX = ''' || :ITEMV509INDEX || ''' ';
+
+
+
+            EXECUTE STATEMENT :LSQLSTRING;
+
+
+
+            :LVARIANTUPDATE = 1;
+
+
+
+
+
+            /* *********************************** */
+
+            /* ******* DEPARTMENT VARIANT UPDATE  ******** */
+
+            /* *********************************** */
+
+            /*NOW - Prices etc */
+
+            SELECT
+
+                O_SUCCES,
+
+                O_MESSAGE
+
+            FROM P_UPDATEDEPARTMENTVARIANT(:LID, :ITEMV509INDEX)
+
+            INTO :LINT,
+
+                 :LMESSAGE;
+
+            :LPROCESSLOG = :LPROCESSLOG || :LMESSAGE;
+
+            /* *********************************** */
+
+            /* ******* DEPARTMENT VARIANT UPDATE  ******** */
+
+            /* *********************************** */
+
+          END
+
+        END
+
+      END
+
+      /* ******************************** */
+
+      /* ******* VARIANT UPDATE  ******** */
+
+      /* ******************************** */
+
+
+
+
+
+      /* ******************************** */
+
+      /* ******* HEAD ITEM UPDATE  ******** */
+
+      /* ******************************** */
+
+      /*Lets set this to null - if we afterwards have a value, this is the head item we need to update*/
+
+      :ITEMPLU_NR = NULL;
+
+      /*We have not found a head item to update. */
+
+      :LHEADITEMUPDATE = 0;
+
+      IF ((COALESCE(:LARTICLENUMBER, '') <> '') OR
+
+          (COALESCE(:LBRAND, '') <> '') OR
+
+          (COALESCE(:LITEMGROUP, '') <> '') OR
+
+          (COALESCE(:LSTYLE, '') <> '')) THEN
+
+      BEGIN
+
+        /*Article number or brand+itemgroup+style is present - Check for head item*/
+
+        /*Or Barcode or EANNumber is present AND we have updated a varaint, and therefor an head item exists*/
+
+        /*First count*/
+
+
+
+        /*Lets count how many head items we can locate*/
+
+        SELECT
+
+            COUNT(*)
+
+        FROM VARER
+
+        WHERE
+
+            VARER.PLU_NR = :LARTICLENUMBER OR (UPPER(VARER.MODEL) = UPPER(COALESCE(:LSTYLE, ''))
+
+            AND UPPER(VARER.LEVERID) = UPPER(COALESCE(:LBRAND, ''))
+
+            AND UPPER(VARER.VAREGRPID) = UPPER(COALESCE(:LITEMGROUP, '')))
+
+        INTO :LCOUNTITEMS;
+
+
+
+        IF (:LCOUNTITEMS = 0) THEN
+
+        BEGIN
+
+          /*We found no variant - inform and skip*/
+
+          :LACTION_ = :LACTION_ || 'Skipped head item.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  Skipped (head item does not exists (Article or brand+itemgroup+model))' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+        ELSE
+
+        IF (:LCOUNTITEMS > 1) THEN
+
+        BEGIN
+
+          /*We found more than 1 head item - inform and skip*/
+
+          :LACTION_ = :LACTION_ || 'Skipped head item.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  Skipped (found ' || COALESCE(:LCOUNTITEMS, '') || ' records (head item) (Article or brand+itemgroup+model))' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+        ELSE
+
+        BEGIN
+
+          /*Exactly 1 variant located. Update fields we can update*/
+
+          /*Lets fetch this one record*/
+
+          SELECT
+
+              VARER.PLU_NR,
+
+              VARER.MODEL,
+
+              VARER.LEVERID,
+
+              VARER.VAREGRPID
+
+          FROM VARER
+
+          WHERE
+
+              VARER.PLU_NR = :LARTICLENUMBER OR (UPPER(VARER.MODEL) = UPPER(COALESCE(:LSTYLE, ''))
+
+              AND UPPER(VARER.LEVERID) = UPPER(COALESCE(:LBRAND, ''))
+
+              AND UPPER(VARER.VAREGRPID) = UPPER(COALESCE(:LITEMGROUP, '')))
+
+          INTO :ITEMPLU_NR,
+
+               :ITEMMODEL,
+
+               :ITEMLEVERID,
+
+               :ITEMVAREGRPID;
+
+          :LACTION_ = :LACTION_ || 'Head item located.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  1 head item located ' || COALESCE(:ITEMPLU_NR, '') || '. Updating this record  (Article or brand+itemgroup+model)' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+      END
+
+      ELSE
+
+      IF (((:LBARCODE <> '') AND
+
+          (NOT(:LBARCODE IS NULL))) OR
+
+          ((:LEANNUMBER <> '') AND
+
+          (NOT(:LEANNUMBER IS NULL)))) THEN
+
+      BEGIN
+
+        /*Barcode or EAN NUmber set - Check for head item*/
+
+        /*First count*/
+
+
+
+        /*Lets count how many head items we can locate*/
+
+        SELECT
+
+            COUNT(*)
+
+        FROM VARER
+
+            INNER JOIN VAREFRVSTR ON
+
+                  VAREFRVSTR.VAREPLU_ID = VARER.PLU_NR
+
+                  AND (VAREFRVSTR.V509INDEX = :LBARCODE
+
+                  OR VAREFRVSTR.EANNUMMER = :LEANNUMBER)
+
+        INTO :LCOUNTITEMS;
+
+
+
+        IF (:LCOUNTITEMS = 0) THEN
+
+        BEGIN
+
+          /*We found no head item - inform and skip*/
+
+          :LACTION_ = :LACTION_ || 'Skipper Head item.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  Skipped (head item does not exists) (Barcode or eannumber)' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+        ELSE
+
+        IF (:LCOUNTITEMS > 1) THEN
+
+        BEGIN
+
+          /*We found more than 1 head item - inform and skip*/
+
+          :LACTION_ = :LACTION_ || 'Skipper Head item.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  Skipped (found ' || COALESCE(:LCOUNTITEMS, '') || ' records (head item) (Barcode or eannumber))' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+        ELSE
+
+        BEGIN
+
+          /*Exactly 1 variant located. Update fields we can update*/
+
+          /*Lets fetch this one record*/
+
+          SELECT
+
+              VARER.PLU_NR,
+
+              VARER.MODEL,
+
+              VARER.LEVERID,
+
+              VARER.VAREGRPID
+
+          FROM VARER
+
+              INNER JOIN VAREFRVSTR ON
+
+                    VAREFRVSTR.VAREPLU_ID = VARER.PLU_NR
+
+                    AND (VAREFRVSTR.V509INDEX = :LBARCODE
+
+                    OR VAREFRVSTR.EANNUMMER = :LEANNUMBER)
+
+          INTO :ITEMPLU_NR,
+
+               :ITEMMODEL,
+
+               :ITEMLEVERID,
+
+               :ITEMVAREGRPID;
+
+
+
+          :LACTION_ = :LACTION_ || 'Located head item.' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+          :LPROCESSLOG = :LPROCESSLOG || '  1 head item located ' || COALESCE(:ITEMPLU_NR, '') || '. Updating this record (Barcode or eannumber)' || ASCII_CHAR(13) || ASCII_CHAR(10);
+
+        END
+
+      END
+
+
+
+      IF (NOT(:ITEMPLU_NR IS NULL)) THEN
+
+      BEGIN
+
+        /*We have found 1 head item*/
+
+        /*
+
+          Fields we can update
+
+
+
+             :LDESCRIPTION,
+
+             :LDESCRIPTION2,
+
+             :LDESCRIPTION3,
+
+             :LLONGDESCRIPTION,
+
+             :LSEASON,
+
+             :LGENDER,
+
+             :LWEIGHT,
+
+             :LCOUNTRYOFORIGION,
+
+             :LQUALITY,
+
+             :LTARRIF_INTRASTAT,
+
+             :LLABELQUANTITY,
+
+             :LCATEGORY1,
+
+             :LCATEGORY2,
+
+             :LCATEGORY3,
+
+             :LCATEGORY4,
+
+             :LCATEGORY5,
+
+             :LSERVICE,
+
+             :LWEBITEM,
+
+             :LBLOCKEDFORSALE,
+
+             :LBLOACKEDFORREGULATION
+
+        */
+
+        /*Lets update fields we can on head item*/
+
+        :LSQLSTRING = 'UPDATE VARER SET ';
+
+        :LSQLSTRING = :LSQLSTRING || '  VARER.BC_UPDATEDATE = ''NOW'' ';
+
+        IF (NOT(:LDESCRIPTION IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.VARENAVN1 = ''' || :LDESCRIPTION || ''' ';
+
+        IF (NOT(:LDESCRIPTION2 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.VARENAVN2 = ''' || :LDESCRIPTION2 || ''' ';
+
+        IF (NOT(:LDESCRIPTION3 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.VARENAVN3 = ''' || :LDESCRIPTION3 || ''' ';
+
+        IF (NOT(:LCATEGORY1 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.KATEGORI1 = ''' || :LCATEGORY1 || ''' ';
+
+        IF (NOT(:LCATEGORY2 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.KATEGORI2 = ''' || :LCATEGORY2 || ''' ';
+
+        IF (NOT(:LCATEGORY3 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.KATEGORI3 = ''' || :LCATEGORY3 || ''' ';
+
+        IF (NOT(:LCATEGORY4 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.KATEGORI4 = ''' || :LCATEGORY4 || ''' ';
+
+        IF (NOT(:LCATEGORY5 IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.KATEGORI5 = ''' || :LCATEGORY5 || ''' ';
+
+        IF (NOT(:LLONGDESCRIPTION IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.VARETEKSTER = ''' || :LLONGDESCRIPTION || ''' ';
+
+        IF (NOT(:LSERVICE IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.SERVICEYDELSE = ' || :LSERVICE || ' ';
+
+        IF (NOT(:LLABELQUANTITY IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.ETIKETANTAL = ' || :LLABELQUANTITY || ' ';
+
+        IF (NOT(:LWEBITEM IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.WEBVARER = ' || :LWEBITEM || ' ';
+
+        IF (NOT(:LSPERRET IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.SPERRET = ' || :LSPERRET || ' ';
+
+        IF (NOT(:LTARRIF_INTRASTAT IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.INTRASTAT = ''' || :LTARRIF_INTRASTAT || ''' ';
+
+        IF (NOT(:LSEASON IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.SEASON = ''' || :LSEASON || ''' ';
+
+        IF (NOT(:LGENDER IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.GENDER = ''' || :LGENDER || ''' ';
+
+        IF (NOT(:LWEIGHT IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.WEIGHT = ' || :LWEIGHT || ' ';
+
+        IF (NOT(:LCOUNTRYOFORIGION IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.COUNTRY_OF_ORIGION = ''' || :LCOUNTRYOFORIGION || ''' ';
+
+        IF (NOT(:LQUALITY IS NULL)) THEN
+
+          :LSQLSTRING = :LSQLSTRING || '  ,VARER.QUALITY = ''' || LQUALITY || ''' ';
+
+        :LSQLSTRING = :LSQLSTRING || 'WHERE ';
+
+        :LSQLSTRING = :LSQLSTRING || '  VARER.PLU_NR = ''' || :ITEMPLU_NR || '''; ';
+
+
+
+        EXECUTE STATEMENT :LSQLSTRING;
+
+
+
+        :LHEADITEMUPDATE = 1;
+
+      END
+
+      /* ******************************** */
+
+      /* ******* HEAD ITEM UPDATE  ******** */
+
+      /* ******************************** */
+
+    END
+
+
+
+    :LHANDLED = 0;
+
+    IF (:LHEADITEMUPDATE = 1) THEN
+
+      :LHANDLED = :LHANDLED + 1;
+
+    IF (:LVARIANTUPDATE = 1) THEN
+
+      :LHANDLED = :LHANDLED + 10;
+
+    UPDATE CREATEUPDATE_ITEMS SET
+
+        CREATEUPDATE_ITEMS.ACTION_ = :LACTION_,
+
+        CREATEUPDATE_ITEMS.HANDLED = :LHANDLED
+
+    WHERE
+
+        CREATEUPDATE_ITEMS.ID = :LID;
+
+
+
+  END /*Iteration of items end*/
+
+
+
+  /*Log action*/
+
+  :LPROCESSLOG = :LPROCESSLOG || 'Procedure ended';
+
+  /*Set done*/
+
+  SELECT
+
+      O_END_TIME
+
+  FROM P_CREATEUPDATE_ITEMS_STOP(:I_UUID, :LPROCESS, :LPROCESSLOG)
+
+  INTO :L_UPDATE_TIME;
+
+
+
+  /*Return to caller*/
+
+  :O_MESSAGE = :LPROCESSLOG;
+
+  :O_SUCCES = 1;
+
+
+
+
+
+  SUSPEND;
+
+END
+
+
