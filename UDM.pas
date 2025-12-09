@@ -784,6 +784,8 @@ var
   lText: string;
   lNumberOfCostpriceUpdates: Integer;
   NumberOfItemsToHandle: Integer;
+  lRegulationTime: TDateTime;
+  lStartTime: TDateTime;
 
   function UpdateCostpriceOnItemInEasyPOS: Boolean;
   const
@@ -794,7 +796,6 @@ var
     lErrotString: string;
     lJSONStr: string;
     DoContinue: Boolean;
-    lRegulationTime: TDateTime;
     lTotalRecords: Integer;
     lSkipCount: Integer;
     lIteration: Integer;
@@ -1091,6 +1092,7 @@ var
     lSkipCount := 0;
     lIteration := 1;
     DoContinueWithInsert := TRUE;
+    DoContinue := TRUE;
 
     // Start transaction
     if (not(trUpdateCostprice.Active)) then
@@ -1160,14 +1162,12 @@ var
           DoContinue := TRUE;
           AddToLog(Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]));
           lLog := lLog + #13#10 + Format('  No records exist in Business Central to head item %s', [QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString]);
-          Result := TRUE;
         end;
       end
       else
       begin
         // Do not continue. Some error from BC when trying to get a record
         DoContinue := FALSE;
-        Result := FALSE;
         FLastStatusCode := (lGetResponse as TBusinessCentral_ErrorResponse).StatusCode;
         if ((lGetResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
           FLastDateTimeForStatusCode503 := NOW;
@@ -1210,6 +1210,7 @@ var
 
 begin
   AddToLog('DoSyncCostPriceFromBusinessCentral - BEGIN');
+  lStartTime := Now;
   lRegulationTime := Now;
   try
     if (ConnectToDB) then
@@ -1320,6 +1321,7 @@ begin
       end;
     end;
   end;
+  LogPerformance('DoSyncCostPriceFromBusinessCentral', lStartTime, lNumberOfCostpriceUpdates);
   AddToLog('DoSyncCostPriceFromBusinessCentral - END');
 end;
 
@@ -1339,6 +1341,7 @@ var
   BC_TransactionID: Integer;
   lDateAndTimeOfLastRun: TDateTime;
   RoutineCanceled: Boolean;
+  lStartTime: TDateTime;
 
   function CreateAndExportFinancialRecord: Boolean;
   var
@@ -1748,6 +1751,7 @@ begin
             end;
 
             AddToLog('  Routine done');
+            LogPerformance('DoSyncronizeFinansCialRecords', lStartTime, lExportCounter);
           end
           else
           begin
@@ -1804,6 +1808,7 @@ var
   lDepartment: string;
   lDateAndTimeOfLastRun: TDateTime;
   ContinueWithVariants: Boolean;
+  lStartTime: TDateTime;
 
   procedure CreateAndExportItems;
   var
@@ -2139,6 +2144,7 @@ begin
     Synes det er underligt at de er 404 for en bestemt
   *)
   AddToLog('DoSyncronizeItems - BEGIN');
+  lStartTime := Now;
   try
     if (ConnectToDB) then
     begin
@@ -2152,7 +2158,7 @@ begin
         LF_BC_PASSWORD,
         LF_BC_Version);
       try
-        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL]));
+        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL(LF_BC_Version)]));
         AddToLog('  TBusinessCentral.Create');
         lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
         try
@@ -2408,6 +2414,7 @@ begin
         tnMain.Rollback;
     end;
   end;
+  LogPerformance('DoSyncronizeItems', lStartTime, lExportCounterHeadItems + lExportCounterHeadItemVariants);
   AddToLog('DoSyncronizeItems - END');
   AddToLog('  ');
 end;
