@@ -347,6 +347,19 @@ begin
   except
     on E: Exception do
     begin
+      // Critical: If file logging fails, write to Windows Event Log as fallback
+      try
+        WriteEventLog(
+          'CRITICAL: File logging failed. Error: ' + E.Message + '. Message was: ' + Copy(aStringToWriteToLogFile, 1, 200),
+          '',
+          'EasyPOS Windows Service to sync. with Business Central',
+          EVENTLOG_ERROR_TYPE,
+          9999,
+          1
+        );
+      except
+        // If both file and event log fail, silently fail to prevent infinite loops
+      end;
     end;
   end;
 end;
@@ -367,6 +380,19 @@ begin
   except
     on E: Exception do
     begin
+      // Critical: If file logging fails, write to Windows Event Log as fallback
+      try
+        WriteEventLog(
+          'CRITICAL: Costprice file logging failed. Error: ' + E.Message + '. Message was: ' + Copy(aStringToWriteToLogFile, 1, 200),
+          '',
+          'EasyPOS Windows Service to sync. with Business Central',
+          EVENTLOG_ERROR_TYPE,
+          9999,
+          1
+        );
+      except
+        // If both file and event log fail, silently fail to prevent infinite loops
+      end;
     end;
   end;
 end;
@@ -468,11 +494,11 @@ begin
         end;
       3:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandør faktura til Business Central OK (Service)';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandï¿½r faktura til Business Central OK (Service)';
         end;
       4:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandør faktura IKKE OK';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverandï¿½r faktura IKKE OK';
         end;
       5:
         begin
@@ -648,7 +674,10 @@ begin
   AddToLog('  LF_BC_COMPANY_URL: ' + LF_BC_COMPANY_URL);
   AddToLog('  LF_BC_Environment: ' + LF_BC_Environment);
   AddToLog('  LF_BC_USERNAME: ' + LF_BC_USERNAME);
-  AddToLog('  LF_BC_PASSWORD: ' + LF_BC_PASSWORD);
+  if LF_BC_PASSWORD <> '' then
+    AddToLog('  LF_BC_PASSWORD: ****')
+  else
+    AddToLog('  LF_BC_PASSWORD: (empty)');
   AddToLog('  LF_BC_ACTIVECOMPANYID: ' + LF_BC_ACTIVECOMPANYID);
   // AddToLog('  LF_BC_Online: ' + LF_BC_Online.ToString(TRUE) + '   LF_BC_Version: ' + LF_BC_Version.ToString);
   AddToLog('  LF_BC_Customer: ' + LF_BC_Customer + '   LF_BC_Version: ' + LF_BC_Version.ToString);
@@ -750,7 +779,7 @@ var
       // Initialiser TStringBuilder
       QueryString := TStringBuilder.Create;
       try
-        // Gennemløb MyQuery og byg strengen
+        // Gennemlï¿½b MyQuery og byg strengen
         QItemsTemp.SQL.Clear;
         lSQLQuery := Format(
           'SELECT FIRST %d SKIP %d VV.V509INDEX ' +
@@ -765,11 +794,11 @@ var
         QItemsTemp.SQL.SaveToFile(SQLLogFileFolder + 'FetchBarcodeToHeadItem.SQL');
         QItemsTemp.Open;
 
-        QItemsTemp.First; // Start ved den første record
+        QItemsTemp.First; // Start ved den fï¿½rste record
         while not QItemsTemp.Eof do
         begin
           VareId := QItemsTemp.FieldByName('v509index').AsString;
-          // Tilføj 'VareId eq '...' til builderen
+          // Tilfï¿½j 'VareId eq '...' til builderen
           QueryString.AppendFormat('VareId eq ''%s''', [VareId]);
           QItemsTemp.Next;
           if (not(QItemsTemp.Eof)) then
@@ -783,7 +812,7 @@ var
 
         Result := QueryString.ToString;
       finally
-        QueryString.Free; // Frigør ressourcer
+        QueryString.Free; // Frigï¿½r ressourcer
       end;
     end;
 
@@ -879,7 +908,7 @@ var
         qUpdateCostprice.ParamByName('PVAREFRVSTRNR').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
         qUpdateCostprice.ParamByName('PVAREGRPID').AsString := FormatFloat('#,#0.00', qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat) + ' > ' +
           FormatFloat('#,#0.00', aCostprice);
-        qUpdateCostprice.ParamByName('PBONTEXT').AsString := 'Kostpris ændret på variant via Business Central';
+        qUpdateCostprice.ParamByName('PBONTEXT').AsString := 'Kostpris ï¿½ndret pï¿½ variant via Business Central';
         qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
         qUpdateCostprice.ParamByName('PUAFD_NAVN').AsString := '';
         qUpdateCostprice.SQL.SaveToFile(SQLLogFileFolder + 'InsertTracingLog.SQL');
@@ -910,11 +939,11 @@ var
     begin
       (*
         Start transactions
-        Gennemløb alle afdelinger
+        Gennemlï¿½b alle afdelinger
         Hent variant, beholdning og kostpris.
-        Trræk alt ud
-        Sæt kostpris
-        Læg alt på lager igen til ny kostpris
+        Trrï¿½k alt ud
+        Sï¿½t kostpris
+        Lï¿½g alt pï¿½ lager igen til ny kostpris
         Commit
       *)
       try
@@ -1045,7 +1074,7 @@ var
 
       AddToLog(Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]));
       lLog := lLog + #13#10 + Format('  FilterValue %s', [lBusinessCentralSetup.FilterValue]);
-      // Mine order værdier.-
+      // Mine order vï¿½rdier.-
       lBusinessCentralSetup.OrderValue := '';
       // Select fields
       lBusinessCentralSetup.SelectValue := '';
@@ -1309,9 +1338,9 @@ var
         if (not(FileExists(lFinansEKsportFileName))) then
         begin
           ReWrite(lExportFile);
-          WriteLn(lExportFile, 'EpID' + Delimiter + 'TransID' + Delimiter + 'TransDato' + Delimiter + 'TransTid' + Delimiter + 'BogføringsDato' + Delimiter + 'BogføringsTid' +
+          WriteLn(lExportFile, 'EpID' + Delimiter + 'TransID' + Delimiter + 'TransDato' + Delimiter + 'TransTid' + Delimiter + 'Bogfï¿½ringsDato' + Delimiter + 'Bogfï¿½ringsTid' +
             Delimiter + 'Bilagsnummer' + Delimiter + 'Tekst' + Delimiter + 'Type' +
-            Delimiter + 'ID' + Delimiter + 'Maskine' + Delimiter + 'Afdeling' + Delimiter + 'Butik' + Delimiter + 'Beløb');
+            Delimiter + 'ID' + Delimiter + 'Maskine' + Delimiter + 'Afdeling' + Delimiter + 'Butik' + Delimiter + 'Belï¿½b');
         end
         else
         begin
@@ -1383,7 +1412,7 @@ var
   begin
     AddToLog(Format('  Checking ID %s in Business Central', [QFetchFinancialRecords.FieldByName('ID').AsString]));
     lBusinessCentralSetup.FilterValue := Format('epId eq %s', [QFetchFinancialRecords.FieldByName('ID').AsString]);
-    // Mine order værdier.-
+    // Mine order vï¿½rdier.-
     lBusinessCentralSetup.OrderValue := '';
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
@@ -1434,7 +1463,7 @@ var
                 lkmCashstatement.type_ := '0';
                 // Kontonummer eller debitornummer
                 lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
-                // Vil det være muligt at lave en ”fedtmule” løsning, hvor der under eksport af finansposter til BC kunne laves en konvertering fra F til K hvis
+                // Vil det vï¿½re muligt at lave en ï¿½fedtmuleï¿½ lï¿½sning, hvor der under eksport af finansposter til BC kunne laves en konvertering fra F til K hvis
                 // kontonummeret er 86123444?
                 if (lkmCashstatement.id = '86123444') then
                 begin
@@ -1470,7 +1499,7 @@ var
                 if (QFetchFinancialRecords.FieldByName('Sortering').AsInteger = 50) then
                 begin
                   // Modtaget en tilgodeseddel
-                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  // ï¿½Ndret i samarbejde med Berit 19-05-2016 i flg ticket #4952
                   lkmCashstatement.type_ := '0';
                   // Kontonummer eller debitornummer
                   lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
@@ -1479,10 +1508,10 @@ var
                 begin
                   // Udstedt en tilgodeseddel
 
-                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  // ï¿½Ndret i samarbejde med Berit 19-05-2016 i flg ticket #4952
                   lkmCashstatement.type_ := '0';
                   // Kontonummer eller debitornummer
-                  // ÆNdret i samarbejde med Berit 19-05-2016 i flg ticket #4952
+                  // ï¿½Ndret i samarbejde med Berit 19-05-2016 i flg ticket #4952
                   lkmCashstatement.id := Trim(QFetchFinancialRecords.FieldByName('KontoNr').AsString);
                 end;
               end;
@@ -1548,7 +1577,7 @@ var
             FLastStatusCode := (lResponse as TBusinessCentral_ErrorResponse).StatusCode;
             if ((lResponse as TBusinessCentral_ErrorResponse).StatusCode = 503) then
               FLastDateTimeForStatusCode503 := NOW;
-            lErrotString := 'Der skete en uventet fejl ved indsættelse af finanspost i BC ' + #13#10 +
+            lErrotString := 'Der skete en uventet fejl ved indsï¿½ttelse af finanspost i BC ' + #13#10 +
               '  EP ID: ' + QFetchFinancialRecords.FieldByName('ID').AsString + #13#10 +
               '  Code: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusCode.ToString + #13#10 +
               '  Message: ' + (lResponse as TBusinessCentral_ErrorResponse).StatusText + #13#10 +
@@ -1669,7 +1698,7 @@ begin
               // Send mail with file LogFolder + lErrorName
               // Rename file
               lText := 'Der skete en fejl ved synkronisering af finansposter til Business Central.' + #13#10 +
-                'Vedhæftet er en fil med information' + #13#10;
+                'Vedhï¿½ftet er en fil med information' + #13#10;
               SendErrorMail(LogFileFolder + lErrorFileName, 'Finansposter', lText);
               // Rename error file
 
@@ -2051,25 +2080,25 @@ begin
 
     Der sker dette:
 
-    - Der skabes forbindelse til DB. Fejler den gøres ingenting.
+    - Der skabes forbindelse til DB. Fejler den gï¿½res ingenting.
     - Laver BC Object (der sker ingenting her, andet end indstillinger loades)
-    - BRUGES IKKE. Læser (som det er i dag) - hvor mange dage tilbage, skal der kigges efter data.
-    - Læser (som det er i dag) - Hvornår kørte jeg sidst en succesful synk. Det kalder vi lige SidsteDatoForSuccesfuldKørsel
-    - Læser hvilken afdeling, der skal ligges til grund for kost- og salgspriser
+    - BRUGES IKKE. Lï¿½ser (som det er i dag) - hvor mange dage tilbage, skal der kigges efter data.
+    - Lï¿½ser (som det er i dag) - Hvornï¿½r kï¿½rte jeg sidst en succesful synk. Det kalder vi lige SidsteDatoForSuccesfuldKï¿½rsel
+    - Lï¿½ser hvilken afdeling, der skal ligges til grund for kost- og salgspriser
     - Henter data. I dag er det:
-    - Varer der er solgt, lagerført eller flyttet i den periode
-    - Bruger perioden SidsteDatoForSuccesfuldKørsel - NU
-    - Løber gennem alle data. Nu indsættes der varer via kmItem and kmVariant. Her kan der ske:
-    - En vare fejler. Dermed overføres ingen af denne varianter. Varen kommer på en fejlliste.
-    - Varen overføres. Alt er godt (faktisk kan jeg se, jeg tæller op, hvor mange gange, den er overført. Egentligt ubrugeligt)
-    - Når alt er gennemløbet gemmer jeg dato for sidst en succesful synk.
-    - Dvs. HVIS der var en fejl, og det var der, så vil næste kørsel gentage hele det samme igen. Og Robert satte vist bare datoen for sidste kørsel tli "meget langt tilbage". Og så gør rutinen det bare en gang mere.
+    - Varer der er solgt, lagerfï¿½rt eller flyttet i den periode
+    - Bruger perioden SidsteDatoForSuccesfuldKï¿½rsel - NU
+    - Lï¿½ber gennem alle data. Nu indsï¿½ttes der varer via kmItem and kmVariant. Her kan der ske:
+    - En vare fejler. Dermed overfï¿½res ingen af denne varianter. Varen kommer pï¿½ en fejlliste.
+    - Varen overfï¿½res. Alt er godt (faktisk kan jeg se, jeg tï¿½ller op, hvor mange gange, den er overfï¿½rt. Egentligt ubrugeligt)
+    - Nï¿½r alt er gennemlï¿½bet gemmer jeg dato for sidst en succesful synk.
+    - Dvs. HVIS der var en fejl, og det var der, sï¿½ vil nï¿½ste kï¿½rsel gentage hele det samme igen. Og Robert satte vist bare datoen for sidste kï¿½rsel tli "meget langt tilbage". Og sï¿½ gï¿½r rutinen det bare en gang mere.
     - Er der en fejl, sendes der en mail.
 
 
 
-    Er der så varer, som konsekvent fejler, kunner det jo tyde på, at disse har en anden fejl.
-    Hvis de så konsekvent kaster en 404 - så skal jeg da undersøge, hvis en bestemt varer kaster denne.
+    Er der sï¿½ varer, som konsekvent fejler, kunner det jo tyde pï¿½, at disse har en anden fejl.
+    Hvis de sï¿½ konsekvent kaster en 404 - sï¿½ skal jeg da undersï¿½ge, hvis en bestemt varer kaster denne.
     Synes det er underligt at de er 404 for en bestemt
   *)
   AddToLog('DoSyncronizeItems - BEGIN');
@@ -2086,7 +2115,7 @@ begin
         LF_BC_PASSWORD,
         LF_BC_Version);
       try
-        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL(1)]));
+        AddToLog(Format('  BC Url: %s', [lBusinessCentralSetup.BuildEntireURL]));
         AddToLog('  TBusinessCentral.Create');
         lBusinessCentral := TBusinessCentral.Create(LogFileFolder);
         try
@@ -2311,7 +2340,7 @@ begin
             // Send mail with file LogFolder + lErrorName
             // Rename file
             lText := 'Der skete en fejl ved synkronisering af varer til Business Central.' + #13#10 +
-              'Vedhæftet er en fil med information' + #13#10;
+              'Vedhï¿½ftet er en fil med information' + #13#10;
             SendErrorMail(LogFileFolder + lErrorFileName, 'Varer', lText);
             // Rename error file
             TFile.Move(LogFileFolder + lErrorFileName, LogFileFolder + Format('Error_Varer_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
@@ -2424,7 +2453,7 @@ var
   begin
     AddToLog(Format('  Checking epid %s in Business Central', [QFetchSalesTransactions.FieldByName('EpID').AsString]));
     lBusinessCentralSetup.FilterValue := Format('epId eq %s', [QFetchSalesTransactions.FieldByName('EpID').AsString]);
-    // Mine order værdier.-
+    // Mine order vï¿½rdier.-
     lBusinessCentralSetup.OrderValue := '';
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
@@ -2623,7 +2652,7 @@ begin
             begin
               // Some error
               lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
-                'Vedhæftet er en fil med information' + #13#10;
+                'Vedhï¿½ftet er en fil med information' + #13#10;
               SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
               // Rename error file
               TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_Salgstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
@@ -2740,7 +2769,7 @@ var
   begin
     AddToLog(Format('  Checking epid %s in Business Central', [QFetchMovementsTransactions.FieldByName('EpID').AsString]));
     lBusinessCentralSetup.FilterValue := Format('epid eq %s', [QFetchMovementsTransactions.FieldByName('EpID').AsString]);
-    // Mine order værdier.-
+    // Mine order vï¿½rdier.-
     lBusinessCentralSetup.OrderValue := '';
     // Select fields
     lBusinessCentralSetup.SelectValue := '';
@@ -2763,9 +2792,9 @@ var
           lkmItemMove.tilButik := QFetchMovementsTransactions.FieldByName('TilButik').AsString;
           (*
             Cast(TR.SALGSTK as Integer) AS ANTAL,
-            Denne kan sørge for, at det bare er en INTEGER, der kommer retur.
+            Denne kan sï¿½rge for, at det bare er en INTEGER, der kommer retur.
 
-            Et alternativ er, at ændre klassen og ændre det nedenfor.
+            Et alternativ er, at ï¿½ndre klassen og ï¿½ndre det nedenfor.
             lkmItemMove.antal := Round(QFetchMovementsTransactions.FieldByName('Antal').AsFloat);
           *)
           lkmItemMove.antal := TRUNC(QFetchMovementsTransactions.FieldByName('Antal').AsFloat);
@@ -2922,7 +2951,7 @@ begin
             else
             begin
               lText := 'Der skete en fejl ved synkronisering af flytningstransaktioner til Business Central.' + #13#10 +
-                'Vedhæftet er en fil med information' + #13#10;
+                'Vedhï¿½ftet er en fil med information' + #13#10;
               SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
               // Rename error file
               TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt',
@@ -3064,7 +3093,7 @@ end;
 // QFetchStockRegulationsTransactions.FieldByName('ButikID').AsString,
 // FormatDateTime('dd-mm-yyyy', QFetchStockRegulationsTransactions.FieldByName('BOGFORINGSDATO').AsDateTime)
 // ]);
-// // Mine order værdier.-
+// // Mine order vï¿½rdier.-
 // lBusinessCentralSetup.OrderValue := '';
 // // Select fields
 // lBusinessCentralSetup.SelectValue := '';
@@ -3221,7 +3250,7 @@ end;
 // else
 // begin
 // lText := 'Der skete en fejl ved synkronisering af tilgangstransaktioner til Business Central.' + #13#10 +
-// 'Vedhæftet er en fil med information' + #13#10;
+// 'Vedhï¿½ftet er en fil med information' + #13#10;
 // SendErrorMail(LogFileFolder + lStockRegulationsTransactionErrorFileName, 'tilgangstransaktioner', lText);
 // // Rename error file
 // TFile.Move(LogFileFolder + lStockRegulationsTransactionErrorFileName, LogFileFolder + Format('Error_Tilgangstransaktioner_%s.txt',
