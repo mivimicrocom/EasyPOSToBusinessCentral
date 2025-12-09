@@ -131,7 +131,8 @@ type
     procedure AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
     function SendErrorMail(aFileToAttach: string; aSection: string; aText: String): Boolean;
     procedure InsertTracingLog(aArt: Integer; aDateFrom: TDateTime; aDateTo: TDateTime; aTransID: Integer);
-    // procedure DoSyncronizeStockRegulationTransaction;
+    procedure LogError(const aContext, aMessage: string; const aException: Exception = nil);
+    procedure LogPerformance(const aOperation: string; aStartTime: TDateTime; aRecordCount: Integer = 0);
   public
     { Public declarations }
     iniFile: TIniFile;
@@ -301,7 +302,7 @@ begin
               except
                 On E: Exception do
                 begin
-                  AddToLog('  FEJL. Kan ikke afsende mail. ');
+                  AddToLog('  ERROR. Cannot send mail. ');
                   AddToLog(E.Message);
                 end;
               end;
@@ -332,7 +333,6 @@ begin
 end;
 
 procedure TDM.AddToLog(aStringToWriteToLogFile: String);
-// This will write into the local log
 var
   lLogFileName: String;
   lTextToWriteToLogFile: String;
@@ -365,7 +365,6 @@ begin
 end;
 
 procedure TDM.AddToLogCostprice(aStringToWriteToLogFile: String);
-// This will write into the local log
 var
   lLogFileName: String;
   lTextToWriteToLogFile: String;
@@ -397,8 +396,48 @@ begin
   end;
 end;
 
+procedure TDM.LogError(const aContext, aMessage: string; const aException: Exception = nil);
+var
+  lErrorText: string;
+begin
+  lErrorText := Format('[ERROR] %s: %s', [aContext, aMessage]);
+  if Assigned(aException) then
+    lErrorText := lErrorText + Format(' | Exception: %s', [aException.Message]);
+
+  AddToLog(lErrorText);
+
+  try
+    WriteEventLog(
+      lErrorText,
+      '',
+      'EasyPOS Windows Service to sync. with Business Central',
+      EVENTLOG_ERROR_TYPE,
+      1001,
+      1
+    );
+  except
+    // Silently fail if event log write fails
+  end;
+end;
+
+procedure TDM.LogPerformance(const aOperation: string; aStartTime: TDateTime; aRecordCount: Integer = 0);
+var
+  lDuration: Int64;
+  lPerformanceText: string;
+begin
+  lDuration := MilliSecondsBetween(Now, aStartTime);
+
+  if aRecordCount > 0 then
+    lPerformanceText := Format('[PERFORMANCE] %s completed in %d ms (%d records, %.2f ms/record)',
+      [aOperation, lDuration, aRecordCount, lDuration / aRecordCount])
+  else
+    lPerformanceText := Format('[PERFORMANCE] %s completed in %d ms',
+      [aOperation, lDuration]);
+
+  AddToLog(lPerformanceText);
+end;
+
 procedure TDM.AddToErrorLog(aStringToWriteToLogFile: String; aFileName: String);
-// This will write into the local error log
 var
   lTextToWriteToLogFile: String;
 begin
@@ -414,7 +453,6 @@ begin
 end;
 
 function TDM.ConnectToDB: Boolean;
-// This will open a connection to a database
 var
   lServer: string;
   lDatabase: string;
@@ -447,14 +485,12 @@ begin
     on E: Exception do
     begin
       Result := FALSE;
-      AddToLog('  ERROR (Connect DB)!');
-      AddToLog(E.Message);
+      LogError('ConnectToDB', 'Database connection failed', E);
     end;
   end;
 end;
 
 procedure TDM.DisconnectFromDB;
-// This will commit transaction and disconnect from database
 begin
   try
     if (tnMain.Active) then
@@ -464,8 +500,7 @@ begin
   except
     on E: Exception do
     begin
-      AddToLog('  ERROR (Disconnect DB)!');
-      AddToLog(E.Message);
+      LogError('DisconnectFromDB', 'Database disconnection failed', E);
     end;
   end;
 end;
@@ -494,11 +529,11 @@ begin
         end;
       3:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverand�r faktura til Business Central OK (Service)';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Export of supplier invoice to Business Central OK (Service)';
         end;
       4:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Eksport af leverand�r faktura IKKE OK';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Export of supplier invoice NOT OK';
         end;
       5:
         begin
@@ -508,56 +543,56 @@ begin
         end;
       6:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Salgstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Sales transactions NOT synchronized with Business Central (Service) ';
         end;
       7:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Tilg synk. med til Business Central OK (Service) ' +
+          INS_Sladre.ParamByName('PBonText').AsString := 'Stock receipt sync. with Business Central OK (Service) ' +
             FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
             FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
         end;
       8:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Tilgangstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Stock receipt transactions NOT synchronized with Business Central (Service) ';
         end;
       9:
         begin
           // if (KaldtFra = 3) then
           // Ins_Sladre.ParamByName('PBonText').AsString := 'Stat synk. med Nav. (' + FormatDateTime('ddmmyy hhmm', NOW) + ' for afdeling: ' + GemtAfdNr + ')'
           // else
-          INS_Sladre.ParamByName('PBonText').AsString := 'Stat synk. til Business Central OK (Service) ' +
+          INS_Sladre.ParamByName('PBonText').AsString := 'Status sync. with Business Central OK (Service) ' +
             FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
             FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
         end;
       10:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Statustransaktioner IKKE sykroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Status transactions NOT synchronized with Business Central (Service) ';
         end;
       11:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Flyt synk. til Business Central OK (Service) ' +
+          INS_Sladre.ParamByName('PBonText').AsString := 'Movement sync. with Business Central OK (Service) ' +
             FormatDateTime('dd-mm-yy hh:mm', aDateFrom) + '-' +
             FormatDateTime('dd-mm-yy hh:mm', aDateTo) + ')';
         end;
       12:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Flytningstransaktioner IKKE sykroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Movement transactions NOT synchronized with Business Central (Service) ';
         end;
       13:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Lagerbeholdning synkroniseret til Business Central OK (Service) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Stock balance synchronized with Business Central OK (Service) ';
         end;
       14:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Lagerbeholdning IKKE synkroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Stock balance NOT synchronized with Business Central (Service) ';
         end;
       15:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Finansposter synkroniseret til Business Central OK (Service) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Financial records synchronized with Business Central OK (Service) ';
         end;
       16:
         begin
-          INS_Sladre.ParamByName('PBonText').AsString := 'Finansposter IKKE synkroniseret med Business Central (Servive) ';
+          INS_Sladre.ParamByName('PBonText').AsString := 'Financial records NOT synchronized with Business Central (Service) ';
         end;
     end;
     AddToLog('  ' + INS_Sladre.ParamByName('PBonText').AsString);
@@ -575,7 +610,7 @@ begin
   except
     on E: Exception do
     begin
-      AddToLog(Format('ERROR. %s', [E.Message]));
+      LogError('InsertTracingLog', Format('Failed to insert tracing log. ART:%s, TransID:%s', [IntToStr(TillagArt + aArt), aTransID.ToString]), E);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
@@ -776,10 +811,10 @@ var
     begin
       // This will build the filter value to filter the result from Business Central
       // This will be all variants to this head item
-      // Initialiser TStringBuilder
+      // Initialize TStringBuilder
       QueryString := TStringBuilder.Create;
       try
-        // Genneml�b MyQuery og byg strengen
+        // Loop through MyQuery and build the string
         QItemsTemp.SQL.Clear;
         lSQLQuery := Format(
           'SELECT FIRST %d SKIP %d VV.V509INDEX ' +
@@ -794,11 +829,11 @@ var
         QItemsTemp.SQL.SaveToFile(SQLLogFileFolder + 'FetchBarcodeToHeadItem.SQL');
         QItemsTemp.Open;
 
-        QItemsTemp.First; // Start ved den f�rste record
+        QItemsTemp.First; // Start at the first record
         while not QItemsTemp.Eof do
         begin
           VareId := QItemsTemp.FieldByName('v509index').AsString;
-          // Tilf�j 'VareId eq '...' til builderen
+          // Add 'VareId eq '...' to the builder
           QueryString.AppendFormat('VareId eq ''%s''', [VareId]);
           QItemsTemp.Next;
           if (not(QItemsTemp.Eof)) then
@@ -812,7 +847,7 @@ var
 
         Result := QueryString.ToString;
       finally
-        QueryString.Free; // Frig�r ressourcer
+        QueryString.Free; // Free resources
       end;
     end;
 
@@ -908,7 +943,7 @@ var
         qUpdateCostprice.ParamByName('PVAREFRVSTRNR').AsString := QFetchItemsUpdateCostprice.FieldByName('PLU_NR').AsString;
         qUpdateCostprice.ParamByName('PVAREGRPID').AsString := FormatFloat('#,#0.00', qFetchVariant.FieldByName('VEJETKOSTPRISSTK').AsFloat) + ' > ' +
           FormatFloat('#,#0.00', aCostprice);
-        qUpdateCostprice.ParamByName('PBONTEXT').AsString := 'Kostpris �ndret p� variant via Business Central';
+        qUpdateCostprice.ParamByName('PBONTEXT').AsString := 'Costprice changed on variant via Business Central';
         qUpdateCostprice.ParamByName('PAFDELING_ID').AsString := aDepartment;
         qUpdateCostprice.ParamByName('PUAFD_NAVN').AsString := '';
         qUpdateCostprice.SQL.SaveToFile(SQLLogFileFolder + 'InsertTracingLog.SQL');
@@ -939,11 +974,11 @@ var
     begin
       (*
         Start transactions
-        Genneml�b alle afdelinger
-        Hent variant, beholdning og kostpris.
-        Trr�k alt ud
-        S�t kostpris
-        L�g alt p� lager igen til ny kostpris
+        Loop through all departments
+        Fetch variant, stock balance and costprice
+        Remove all stock
+        Set costprice
+        Add all to stock again with new costprice
         Commit
       *)
       try
@@ -1175,6 +1210,7 @@ var
 
 begin
   AddToLog('DoSyncCostPriceFromBusinessCentral - BEGIN');
+  lRegulationTime := Now;
   try
     if (ConnectToDB) then
     begin
@@ -1618,6 +1654,7 @@ var
 
 begin
   AddToLog('DoSyncronizeFinansCialRecords - BEGIN');
+  lStartTime := Now;
   try
     if (ConnectToDB) then
     begin
@@ -2366,8 +2403,7 @@ begin
   except
     on E: Exception do
     begin
-      AddToLog(Format('DoSyncronizeItems - ERROR. %s', [E.Message]));
-      WriteEventLog(Format('DoSyncronizeItems - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3199, 1);
+      LogError('DoSyncronizeItems', 'Items sync failed', E);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
@@ -2390,6 +2426,7 @@ var
   BC_TransactionID: Integer;
   RoutineCanceled: Boolean;
   lText: string;
+  lStartTime: TDateTime;
 
   Function CreateAndExportSalesTransaction: Boolean;
   var
@@ -2564,6 +2601,7 @@ var
 
 begin
   AddToLog('DoSyncronizeSalesTransactions - BEGIN');
+  lStartTime := Now;
   try
     if (ConnectToDB) then
     begin
@@ -2646,16 +2684,17 @@ begin
                 // This is now done after each successful transfer
                 // iniFile.WriteDateTime('SalesTransaction', 'Last run', lToDateAndTime);
                 InsertTracingLog(5, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+                LogPerformance('DoSyncronizeSalesTransactions', lStartTime, lNumberOfExportedSalesTransactions);
               end;
             end
             else
             begin
               // Some error
-              lText := 'Der skete en fejl ved synkronisering af salgstransaktioner til Business Central.' + #13#10 +
-                'Vedh�ftet er en fil med information' + #13#10;
-              SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Salgstransaktioner', lText);
+              lText := 'An error occurred synchronizing sales transactions to Business Central.' + #13#10 +
+                'Attached is a file with information' + #13#10;
+              SendErrorMail(LogFileFolder + lSalesTransactionErrorFileName, 'Sales transactions', lText);
               // Rename error file
-              TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_Salgstransaktioner_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
+              TFile.Move(LogFileFolder + lSalesTransactionErrorFileName, LogFileFolder + Format('Error_SalesTransactions_%s.txt', [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
               if (tnMain.Active) then
                 tnMain.Rollback;
               AddToLog('  Export of sales transaction ended with errors.');
@@ -2684,8 +2723,7 @@ begin
   except
     on E: Exception do
     begin
-      AddToLog(Format('DoSyncronizeSalesTransactions - ERROR. %s', [E.Message]));
-      WriteEventLog(Format('DoSyncronizeSalesTransactions - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 3299, 1);
+      LogError('DoSyncronizeSalesTransactions', 'Sales transactions sync failed', E);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
@@ -2708,6 +2746,7 @@ var
   RoutineCanceled: Boolean;
   lResponse: TBusinessCentral_Response;
   lText: string;
+  lStartTime: TDateTime;
 
   Function CreateAndExportMovementsTransaction: Boolean;
   var
@@ -2877,6 +2916,7 @@ var
 
 begin
   AddToLog('DoSyncronizeMovemmentsTransaction - BEGIN');
+  lStartTime := Now;
   try
     if (ConnectToDB) then
     begin
@@ -2947,14 +2987,15 @@ begin
               // This is now done aftereach succesful transfer
               // iniFile.WriteDateTime('MovementsTransaction', 'Last run', lToDateAndTime);
               InsertTracingLog(11, lFromDateAndTime, lToDateAndTime, BC_TransactionID);
+              LogPerformance('DoSyncronizeMovemmentsTransaction', lStartTime, lNumberOfExportedMovementsTransactions);
             end
             else
             begin
-              lText := 'Der skete en fejl ved synkronisering af flytningstransaktioner til Business Central.' + #13#10 +
-                'Vedh�ftet er en fil med information' + #13#10;
-              SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Flytningstransaktioner', lText);
+              lText := 'An error occurred synchronizing movement transactions to Business Central.' + #13#10 +
+                'Attached is a file with information' + #13#10;
+              SendErrorMail(LogFileFolder + lMovementsTransactionErrorFileName, 'Movement transactions', lText);
               // Rename error file
-              TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_Flytningstransaktioner_%s.txt',
+              TFile.Move(LogFileFolder + lMovementsTransactionErrorFileName, LogFileFolder + Format('Error_MovementTransactions_%s.txt',
                 [FormatDateTime('ddmmyyyy_hhmmss', NOW)]));
               if (tnMain.Active) then
                 tnMain.Rollback;
@@ -2984,9 +3025,7 @@ begin
   except
     on E: Exception do
     begin
-      AddToLog(Format('DoSyncronizeMovemmentsTransaction - ERROR. %s', [E.Message]));
-      WriteEventLog(Format('DoSyncronizeMovemmentsTransaction - ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central',
-        EVENTLOG_ERROR_TYPE, 3399, 1);
+      LogError('DoSyncronizeMovemmentsTransaction', 'Movements transactions sync failed', E);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
@@ -3357,8 +3396,7 @@ begin
   except
     on E: Exception do
     begin
-      WriteEventLog(Format('ERROR. %s', [E.Message]), '', 'EasyPOS Windows Service to sync. with Business Central', EVENTLOG_ERROR_TYPE, 1000, 0);
-      AddToLog(Format('ERROR. %s', [E.Message]));
+      LogError('DoHandleEksportToBusinessCentral', 'Export handler failed', E);
       if (tnMain.Active) then
         tnMain.Rollback;
     end;
