@@ -94,19 +94,19 @@ END
 ### ✅ 4. P_UPDATEITEMS (Stored Procedure)
 
 **Formål:** Batch import/update af varer fra eksterne kilder  
-**Bruges af:** WebOrder system, import rutiner
+**Bruges af:** WebOrder system, import rutiner, Products API (CRUD)
 
 **Relevant kode:**
 ```sql
 UPDATE VARER SET
-  VARER.BC_UPDATEDATE = 'NOW',
+  VARER.WEBDATO = 'NOW',
   VARER.VARENAVN1 = :LDESCRIPTION,
   VARER.VARENAVN2 = :LDESCRIPTION2,
   ...
 WHERE VARER.PLU_NR = :ITEMPLU_NR;
 ```
 
-**Note:** Denne procedure sætter ALTID BC_UPDATEDATE = 'NOW' når den opdaterer en vare.
+**Note:** Denne procedure sætter IKKE direkte BC_UPDATEDATE. I stedet opdateres BC_UPDATEDATE via VARER_BC_CHANGES trigger, og kun hvis relevante felter faktisk ændres.
 
 ---
 
@@ -141,7 +141,7 @@ WHERE VARER.PLU_NR = :ITEMPLU_NR;
 
 #### Special Cases:
 18. **Ny variant oprettet** (INS_VAREFRVSTR trigger)
-19. **Import via P_UPDATEITEMS** (sætter altid BC_UPDATEDATE)
+19. **Import via P_UPDATEITEMS** (BC_UPDATEDATE via triggers - kun hvis felter ændres)
 
 ### ❌ Felter der IKKE Trigger Synkronisering
 
@@ -212,7 +212,7 @@ WHERE VARER.PLU_NR = :ITEMPLU_NR;
 1. ✅ Direkte opdatering af de 12 overvågede felter på VARER
 2. ✅ Opdatering af de 5 overvågede felter på VAREFRVSTR
 3. ✅ Oprettelse af ny variant (INS_VAREFRVSTR)
-4. ✅ Kald til P_UPDATEITEMS procedure
+4. ✅ P_UPDATEITEMS procedure (kun hvis triggers detekterer feltændringer)
 5. ✅ Manuel `UPDATE VARER SET BC_UPDATEDATE='NOW'`
 
 **Der er INGEN andre måder BC_UPDATEDATE kan ændres på.**
@@ -237,12 +237,13 @@ Dette betyder at variant-ændringer trigger en fuld re-synkronisering af hovedva
 
 ### 2. P_UPDATEITEMS Procedure
 
-Denne procedure bruges sandsynligvis til:
+Denne procedure bruges til:
 - WebOrder import
+- Products API (CRUD) opdateringer
 - Batch import fra eksterne systemer
 - Manuel data-opdatering
 
-Den sætter **ALTID** BC_UPDATEDATE når den kører.
+Den opdaterer **KUN** BC_UPDATEDATE hvis VARER_BC_CHANGES trigger detekterer faktiske feltændringer.
 
 ### 3. Performance
 
@@ -297,7 +298,7 @@ WHERE PLU_NR = '12345';
 
 **MED 100% SIKKERHED kan vi sige:**
 
-Kun ændringer i de **17 identificerede felter** (12 på VARER + 5 på VAREFRVSTR), samt oprettelse af nye varianter og kald til P_UPDATEITEMS, vil markere en vare til synkronisering til Business Central.
+Kun ændringer i de **17 identificerede felter** (12 på VARER + 5 på VAREFRVSTR), samt oprettelse af nye varianter, vil markere en vare til synkronisering til Business Central. P_UPDATEITEMS opdaterer kun BC_UPDATEDATE hvis triggers detekterer faktiske feltændringer.
 
 Der er ingen skjulte mekanismer, computed fields, views eller andre triggers der kan påvirke BC_UPDATEDATE.
 

@@ -32,10 +32,11 @@ END
 Procedure bruges til:
 - ✅ Batch import af vare-opdateringer fra eksterne kilder
 - ✅ WebOrder system opdateringer
+- ✅ Products API (CRUD) opdateringer
 - ✅ Manuel data-opdatering via import værktøjer
 - ✅ Automatisk opdatering af vare master data
 
-**Vigtigt:** Denne procedure sætter ALTID `BC_UPDATEDATE = 'NOW'` når den opdaterer varer!
+**Vigtigt:** Denne procedure opdaterer BC_UPDATEDATE via VARER_BC_CHANGES trigger - kun hvis felter faktisk ændres!
 
 ---
 
@@ -139,7 +140,7 @@ INTO :SUCCESS_VAR, :MESSAGE_VAR;
 │  P_UPDATEITEMS                  │ │
 │  - Finder vare via barcode/EAN  │◄┘
 │  - Opdaterer VARER felter       │
-│  - Sætter BC_UPDATEDATE='NOW'   │
+│  - BC_UPDATEDATE via triggers   │
 │  - Returnerer success/error     │
 └─────────────────┬───────────────┘
                   │
@@ -310,15 +311,14 @@ WHERE CREATEUPDATE_ITEMS.ID = :LID;
 
 ### BC_UPDATEDATE Påvirkning
 
-**KRITISK:** P_UPDATEITEMS sætter ALTID:
-```sql
-VARER.BC_UPDATEDATE = 'NOW'
-```
+**VIGTIGT:** P_UPDATEITEMS sætter IKKE direkte BC_UPDATEDATE.
+
+I stedet opdateres BC_UPDATEDATE **via VARER_BC_CHANGES trigger**, som kun aktiveres når relevante felter faktisk ændres.
 
 Dette betyder:
-- ✅ Varen vil blive synkroniseret til BC ved næste EP_TO_BC kørsel
-- ✅ Selv hvis ingen felter ændres, opdateres BC_UPDATEDATE
-- ⚠️ Kan skabe unødvendige BC synkroniseringer
+- ✅ Varen vil kun blive synkroniseret til BC hvis faktiske vare-felter ændres
+- ✅ Kun ændringer i de 17 overvågede felter trigger BC_UPDATEDATE
+- ⚡ Intelligent og effektiv synkronisering - undgår "tomme" opdateringer
 
 ### Error Handling
 

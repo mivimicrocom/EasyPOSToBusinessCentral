@@ -12,9 +12,10 @@ Denne mappe indeholder brugervenlig dokumentation for EasyPOS-BC integrationspro
 
 | Dokument | Beskrivelse | Målgruppe |
 |---|---|---|
-| **[Projekt_Analyse.md](Projekt_Analyse.md)** | Komplet projektanalyse - start her! | Alle |
+| **[Bruger_Guide_Vare_Synkronisering.md](Bruger_Guide_Vare_Synkronisering.md)** | 🌟 **START HER!** Simpel guide til vare-synkronisering | Brugere |
+| **[Projekt_Analyse.md](Projekt_Analyse.md)** | Komplet projektanalyse | Support, Admin |
 | **[Sync_Overview.md](Sync_Overview.md)** | Oversigt over alle synkroniseringer | Support, Admin |
-| **[BC_UPDATEDATE_Application_Overview.md](BC_UPDATEDATE_Application_Overview.md)** | Hvordan BC_UPDATEDATE virker på tværs af applikationer | Brugere, Support |
+| **[BC_UPDATEDATE_Application_Overview.md](BC_UPDATEDATE_Application_Overview.md)** | Hvordan BC_UPDATEDATE virker på tværs af applikationer | Support, Udviklere |
 | **[CHANGELOG.md](CHANGELOG.md)** | Versionshistorik og ændringer | Udviklere, Admin |
 | **[SECURITY_FIXES.md](SECURITY_FIXES.md)** | Sikkerhedsfixes (december 2025) | Udviklere, Security |
 

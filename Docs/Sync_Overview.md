@@ -130,7 +130,7 @@ INSERT INTO SLADREHANK (
 ┌────────────▼─────────────────────┐
 │  Products API (CRUD)             │
 │  (Import fra eksterne systemer)  │
-│  → P_UPDATEITEMS → BC_UPDATEDATE │
+│  → P_UPDATEITEMS → Triggers      │
 └────────────┬─────────────────────┘
              │
              ▼

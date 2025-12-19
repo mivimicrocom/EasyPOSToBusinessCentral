@@ -448,7 +448,7 @@ P_UPDATEITEMS opdaterer **IKKE** direkte BC_UPDATEDATE. I stedet:
 
 **Database Procedures Kaldt:**
 1. `P_CREATEUPDATEITEMS` - Orchestrator
-2. `P_UPDATEITEMS` - Opdaterer VARER tabel
+2. `P_UPDATEITEMS` - Opdaterer VARER tabel (BC_UPDATEDATE via triggers)
 3. (Evt.) `P_CREATEITEMS` - Hvis vare ikke findes
 
 **Tabeller Påvirket:**
@@ -612,7 +612,7 @@ ORDER BY
 │  2. Validerer data   │
 │  3. Kalder           │
 │     P_UPDATEITEMS    │
-│  4. Sætter           │
+│  4. Triggers sætter  │
 │     BC_UPDATEDATE    │
 └──────────┬───────────┘
            │

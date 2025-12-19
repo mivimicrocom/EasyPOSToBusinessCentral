@@ -4,6 +4,75 @@ Alle væsentlige ændringer til projektet dokumenteres i denne fil.
 
 ---
 
+## [Unreleased] - 2025-12-18
+
+### 🐛 Fixed - VAREFRVSTR_BC_CHANGES Trigger Bug
+
+**Problem:** VAREFRVSTR_BC_CHANGES trigger brugte `>` i stedet for `<>` for nogle sammenligninger
+
+**Påvirkede felter:**
+- LAENGDE_NAVN (længde)
+- EANNUMMER (EAN barcode)
+- V509INDEX (stregkode)
+
+**Konsekvens:** Ændringer til MINDRE værdier blev IKKE detekteret, og BC_UPDATEDATE blev ikke opdateret.
+
+**Løsning:** Rettet alle 3 sammenligninger fra `>` til `<>` 
+
+**Status:** ✅ Rettet og testet
+
+---
+
+### 📝 Documentation - P_UPDATEITEMS BC_UPDATEDATE Ændring
+
+**Ændring:** P_UPDATEITEMS stored procedure sætter ikke længere direkte BC_UPDATEDATE.
+
+**Detaljer:**
+- P_UPDATEITEMS opdaterer nu kun vare-felter (f.eks. VARENAVN1, KATEGORI1, etc.)
+- BC_UPDATEDATE opdateres **kun via VARER_BC_CHANGES trigger** når felter faktisk ændres
+- Dette undgår "tomme" synkroniseringer hvor kun priser opdateres
+- Intelligent trigger-baseret synkronisering
+
+**Opdaterede dokumenter:**
+- `BC_UPDATEDATE_Application_Overview.md` - Rettet Products API flow beskrivelse
+- `Sync_Overview.md` - Rettet data flow diagram
+- `Internal/P_UPDATEITEMS_Analysis.md` - Opdateret BC_UPDATEDATE påvirkning
+- `Internal/BC_UPDATEDATE_Complete_Analysis.md` - Rettet P_UPDATEITEMS beskrivelse
+- `Internal/P_UPDATEITEMS_BC_UPDATEDATE_Change.md` - Dokumenterer ændringen
+
+**Reference:** Se `Internal/P_UPDATEITEMS_BC_UPDATEDATE_Change.md` for komplet dokumentation af ændringen.
+
+### ✨ Added - Brugervenlig Guide
+
+**Ny fil:** `Bruger_Guide_Vare_Synkronisering.md`
+
+**Formål:** Enkel guide til slutbrugere om vare-synkronisering til Business Central
+
+**Indhold:**
+- Hvad synkroniseres (og hvad gør ikke)
+- Hvornår sker synkronisering automatisk
+- Hvordan man manuelt synkroniserer
+- Typiske scenarier med eksempler
+- Troubleshooting tips
+
+**Målgruppe:** EasyPOS brugere (ikke-tekniske)
+
+### ✅ Added - Master Database Verifikation
+
+**Ny fil:** `Internal/BC_UPDATEDATE_MasterDB_Verification.md`
+
+**Formål:** Verificere at kun dokumenterede triggers/procedures opdaterer BC_UPDATEDATE
+
+**Resultat:**
+- Bekræftet 3 triggers (VARER_BC_CHANGES, VAREFRVSTR_BC_CHANGES, INS_VAREFRVSTR)
+- Bekræftet P_UPDATEITEMS IKKE sætter BC_UPDATEDATE direkte
+- Fundet og dokumenteret bug i VAREFRVSTR_BC_CHANGES (nu rettet)
+- Alle 18 overvågede felter verificeret
+
+**Kilde:** MasterDBMetadata.sql
+
+---
+
 ## [Unreleased] - 2025-12-09
 
 ### 🐛 Fixed - Kompileringsfejl
